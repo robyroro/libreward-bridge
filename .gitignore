@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.sqlite*
+wallet-data/
+sbom.cdx.json
+*.log
+.pnpm-store/
+postgres-data/
+*.pid
+*.pem
+*.key

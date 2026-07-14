@@ -1,0 +1,32 @@
+groups:
+  - name: libreward-bridge
+    rules:
+      - alert: LibreRewardLiquidityUnhealthy
+        expr: libreward_liquidity_healthy == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "LibreReward wallet liquidity is below policy or peer payments are blocked"
+      - alert: LibreRewardLiquidityMetricsMissing
+        expr: absent(libreward_liquidity_healthy)
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "LibreReward has no recent liquidity health metric"
+      - alert: LibreRewardLiquiditySnapshotStale
+        expr: time() - libreward_liquidity_last_check_timestamp_seconds > 300
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "LibreReward wallet liquidity snapshot is stale"
+      - alert: LibreRewardReconciliationBacklog
+        expr: libreward_reconciliation_backlog > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "LibreReward provider operations require reconciliation"
+      - alert: LibreRewardWebhookFailures
+        expr: increase(libreward_webhook_failures_total[15m]) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: "LibreReward webhook delivery failures increased"

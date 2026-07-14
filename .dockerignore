@@ -1,0 +1,13 @@
+.git
+.env*
+node_modules
+dist
+coverage
+tests
+docs
+*.log
+wallet-data
+*.sqlite*
+*.pem
+*.key
+sbom.cdx.json

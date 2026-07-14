@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: LibreReward Bridge API
+  version: 0.1.0
+  description: Tenant API for privacy-preserving GNU Taler reward claims.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerApiKey: []
+paths:
+  /v1/rewards:
+    post:
+      operationId: createReward
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReward' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/RewardCreated' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/RewardCreated' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /v1/rewards/{rewardId}:
+    get:
+      operationId: getReward
+      parameters: [{ $ref: '#/components/parameters/RewardId' }]
+      responses:
+        '200': { description: Reward, content: { application/json: { schema: { $ref: '#/components/schemas/Reward' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/rewards/{rewardId}/cancel:
+    post:
+      operationId: cancelReward
+      parameters: [{ $ref: '#/components/parameters/RewardId' }]
+      responses:
+        '200': { description: Cancelled reward, content: { application/json: { schema: { $ref: '#/components/schemas/Reward' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/rewards/{rewardId}/regenerate-claim:
+    post:
+      operationId: regenerateClaim
+      parameters: [{ $ref: '#/components/parameters/RewardId' }]
+      responses:
+        '200':
+          description: New one-time claim URL
+          content: { application/json: { schema: { type: object, required: [claim_url], properties: { claim_url: { type: string, format: uri } } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/rewards/{rewardId}/events:
+    get:
+      operationId: listRewardEvents
+      parameters:
+        - $ref: '#/components/parameters/RewardId'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 128 } }
+      responses:
+        '200': { description: Events, content: { application/json: { schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Event' } }, next_cursor: { type: [string, 'null'] } } } } } }
+  /v1/webhook-endpoints:
+    get:
+      operationId: listWebhookEndpoints
+      responses: { '200': { description: Endpoints } }
+    post:
+      operationId: createWebhookEndpoint
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WebhookInput' } } }
+      responses:
+        '201': { description: Created; secret appears only in this response }
+  /v1/webhook-endpoints/{endpointId}:
+    parameters: [{ name: endpointId, in: path, required: true, schema: { type: string } }]
+    patch:
+      operationId: updateWebhookEndpoint
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookInput' } } } }
+      responses: { '200': { description: Updated } }
+    delete:
+      operationId: deleteWebhookEndpoint
+      responses: { '204': { description: Deleted } }
+  /v1/webhook-endpoints/{endpointId}/test:
+    post:
+      operationId: testWebhookEndpoint
+      parameters: [{ name: endpointId, in: path, required: true, schema: { type: string } }]
+      responses: { '202': { description: Test queued } }
+  /v1/operator/rewards/{reference}:
+    get:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorGetReward
+      parameters: [{ $ref: '#/components/parameters/OperatorReference' }]
+      responses:
+        '200': { description: Operational reward and provider state }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/operator/rewards/{reference}/events:
+    get:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorListRewardEvents
+      parameters: [{ $ref: '#/components/parameters/OperatorReference' }]
+      responses: { '200': { description: Reward lifecycle events }, '401': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' } }
+  /v1/operator/rewards/{reference}/webhook-deliveries:
+    get:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorListWebhookDeliveries
+      parameters: [{ $ref: '#/components/parameters/OperatorReference' }]
+      responses: { '200': { description: Sanitized webhook delivery history }, '401': { $ref: '#/components/responses/Error' }, '403': { $ref: '#/components/responses/Error' } }
+  /v1/operator/rewards/{reference}/reconcile:
+    post:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorReconcileReward
+      parameters: [{ $ref: '#/components/parameters/OperatorReference' }]
+      responses:
+        '202': { description: Known provider operation reconciled }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/operator/webhook-deliveries/{deliveryId}/retry:
+    post:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorRetryWebhookDelivery
+      parameters: [{ name: deliveryId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '202': { description: Failed delivery queued for retry }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/operator/liquidity:
+    get:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorGetLiquidity
+      responses:
+        '200': { description: Latest sanitized per-currency wallet balance snapshots }
+  /v1/operator/liquidity/check:
+    post:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorCheckLiquidity
+      responses:
+        '202': { description: Serialized worker balance check queued }
+  /v1/operator/retention/run:
+    post:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorRunRetention
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties: { dry_run: { type: boolean, default: true } }
+      responses: { '200': { description: Retention preview or execution counts } }
+  /v1/operator/audit-events:
+    get:
+      security: [{ operatorApiKey: [] }]
+      operationId: operatorListAuditEvents
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: before, in: query, schema: { type: string, format: date-time } }
+      responses: { '200': { description: Append-only operator audit events } }
+  /claim/{token}:
+    get:
+      security: []
+      operationId: showClaim
+      parameters: [{ $ref: '#/components/parameters/ClaimToken' }]
+      responses: { '200': { description: Accessible no-tracking HTML claim page, content: { text/html: { schema: { type: string } } } } }
+  /claim/{token}/start:
+    post:
+      security: []
+      operationId: startClaim
+      parameters: [{ $ref: '#/components/parameters/ClaimToken' }]
+      responses: { '202': { description: Provider operation queued }, '409': { $ref: '#/components/responses/Error' } }
+  /claim/{token}/status:
+    get:
+      security: []
+      operationId: claimStatus
+      parameters: [{ $ref: '#/components/parameters/ClaimToken' }]
+      responses: { '200': { description: Claim state and Taler URI when ready } }
+  /healthz:
+    get: { security: [], operationId: health, responses: { '200': { description: Process alive } } }
+  /readyz:
+    get: { security: [], operationId: readiness, responses: { '200': { description: Dependencies ready }, '503': { description: Dependency unavailable } } }
+  /version:
+    get: { security: [], operationId: version, responses: { '200': { description: Build and API version } } }
+  /metrics:
+    get: { security: [], operationId: metrics, responses: { '200': { description: Prometheus metrics, content: { text/plain: { schema: { type: string } } } } } }
+components:
+  securitySchemes:
+    bearerApiKey:
+      type: http
+      scheme: bearer
+      description: Scoped `lrk_<prefix>.<secret>` key.
+    operatorApiKey:
+      type: http
+      scheme: bearer
+      description: Role-scoped `lro_<prefix>.<secret>` operator key. Never use tenant keys for operator routes.
+  parameters:
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+    RewardId: { name: rewardId, in: path, required: true, schema: { type: string, pattern: '^rw_[A-Za-z0-9_-]+$' } }
+    OperatorReference: { name: reference, in: path, required: true, schema: { type: string, minLength: 4, maxLength: 128 }, description: Reward public ID or opaque external reference. }
+    ClaimToken: { name: token, in: path, required: true, schema: { type: string, minLength: 43, maxLength: 43 }, description: Secret bearer token; redact it from logs. }
+  responses:
+    Error:
+      description: Normalized error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    CreateReward:
+      type: object
+      additionalProperties: false
+      required: [amount, description]
+      properties:
+        amount: { type: string, pattern: '^[A-Z][A-Z0-9]{0,11}:[0-9]+(\.[0-9]{1,8})?$', examples: ['KUDOS:5.25'] }
+        description: { type: string, minLength: 1, maxLength: 256 }
+        external_reference: { type: string, minLength: 1, maxLength: 128 }
+        metadata: { type: object, maxProperties: 32, additionalProperties: { type: [string, number, boolean, 'null'] } }
+        expires_at: { type: string, format: date-time }
+    Reward:
+      type: object
+      required: [id, amount, description, status, expires_at, created_at, updated_at]
+      properties:
+        id: { type: string }
+        external_reference: { type: [string, 'null'] }
+        amount: { type: string }
+        description: { type: string }
+        metadata: { type: object }
+        status: { type: string, enum: [created, claimable, claim_in_progress, claimed, expired, cancelled, failed, reconciliation_required] }
+        expires_at: { type: string, format: date-time }
+        claimed_at: { type: [string, 'null'], format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        failure_code: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RewardCreated:
+      allOf:
+        - $ref: '#/components/schemas/Reward'
+        - type: object
+          required: [claim_url, idempotent]
+          properties: { claim_url: { type: string, format: uri }, idempotent: { type: boolean } }
+    Event:
+      type: object
+      required: [event_id, event_type, data, created_at]
+      properties: { event_id: { type: string }, event_type: { type: string }, data: { type: object }, created_at: { type: string, format: date-time } }
+    WebhookInput:
+      type: object
+      additionalProperties: false
+      properties: { url: { type: string, format: uri, maxLength: 2048 }, description: { type: string, maxLength: 120 }, enabled: { type: boolean } }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties: { code: { type: string }, message: { type: string }, request_id: { type: string }, details: { type: object } }

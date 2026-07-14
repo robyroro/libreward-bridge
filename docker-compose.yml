@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:17.10-bookworm
+    environment:
+      POSTGRES_DB: libreward
+      POSTGRES_USER: libreward
+      POSTGRES_PASSWORD: local-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libreward -d libreward"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+  migrate:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://libreward:local-development-only@postgres:5432/libreward
+    command: ["node", "dist/src/cli.js", "migrate"]
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://libreward:local-development-only@postgres:5432/libreward
+    ports: ["8080:8080"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://libreward:local-development-only@postgres:5432/libreward
+    command: ["node", "dist/src/worker-main.js"]
+    # Override the image-level API probe: the worker has no HTTP listener.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const fs=require('node:fs');process.exit(fs.readFileSync('/proc/1/cmdline','utf8').includes('worker-main.js')?0:1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+volumes:
+  postgres-data:
