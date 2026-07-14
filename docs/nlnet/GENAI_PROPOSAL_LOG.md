@@ -92,3 +92,25 @@ The proposal must not claim these changes as paid grant work; they are pre-submi
 ## Working-draft revision record
 
 During the same Interaction 2, the working proposal was reviewed against public evidence and revised to replace the European-dimension placeholder with a concrete project-based explanation referencing GNU Taler, European research/civic users and Germany-based Formbricks. It was also clarified that the independently deployable component is the proposed project boundary, avoiding confusion between project scope and prior funding. Finally, the suggested files were reduced to the form's three general attachment slots, with the two GenAI files assigned to the separate prompt-file slots. The preserved unedited output was not changed. Further AI-assisted revisions require another dated prompt/output entry.
+
+## Interaction 3 — attribution correction
+
+- Model: OpenAI Codex, GPT-5 family (the client did not expose a more specific model snapshot)
+- Timestamp: 2026-07-14T23:56:18+03:00
+- Use: replace GitHub's special co-author trailer with neutral AI-assistance disclosure, update the rewritten root commit identifier, and keep the proposal accurate after the history correction
+
+### Exact prompt
+
+```text
+do it
+```
+
+Context: this directly followed the request “how to remove claude from contributor?” and the explanation that the public root commit contained a `Co-Authored-By` trailer.
+
+### Unedited proposal-text output
+
+```text
+The initial public prototype commit records that Claude Opus 4.8 was used as an AI assistant; Claude is not represented as a human or legal co-author/contributor. That assistance concerns pre-existing project materials rather than grant-funded work and is disclosed in docs/GENAI_USAGE.md. Historical prompt transcripts must be supplied if available. All generated material is subject to human review, testing and license/provenance checks; no purely generated output will be presented as grant-eligible human work.
+```
+
+The original `GENAI_OUTPUT_2026-07-14.txt` remains byte-for-byte unchanged and therefore describes the pre-rewrite co-author trailer. This dated record explains the later correction rather than altering the preserved output.

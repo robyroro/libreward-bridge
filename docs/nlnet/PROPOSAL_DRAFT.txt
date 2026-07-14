@@ -117,7 +117,7 @@ GENERATIVE AI
 
 Yes. OpenAI Codex (GPT-5) was used on 14 July 2026 to audit the repository against the current NLnet call, draft this proposal package, activate CI and improve documentation. The model, timestamp, exact prompts and unedited proposal output are recorded in docs/nlnet/GENAI_PROPOSAL_LOG.md and docs/nlnet/GENAI_OUTPUT_2026-07-14.txt.
 
-The initial public prototype commit also records Claude Opus 4.8 as a co-author. That assistance concerns pre-existing project materials rather than grant-funded work and is disclosed in docs/GENAI_USAGE.md. Historical prompt transcripts must be supplied if available. All generated material is subject to human review, testing and license/provenance checks; no purely generated output will be presented as grant-eligible human work.
+The initial public prototype commit records that Claude Opus 4.8 was used as an AI assistant; Claude is not represented as a human or legal co-author/contributor. That assistance concerns pre-existing project materials rather than grant-funded work and is disclosed in docs/GENAI_USAGE.md. Historical prompt transcripts must be supplied if available. All generated material is subject to human review, testing and license/provenance checks; no purely generated output will be presented as grant-eligible human work.
 
 SUGGESTED ATTACHMENTS
 
