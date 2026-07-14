@@ -2,7 +2,7 @@
 
 Production approval requires named reviewers who are independent of the implementation author. Running automated checks or writing this package is not an independent review.
 
-Tracking: security/privacy review [issue #4](https://github.com/robyroro/recompensated/issues/4); legal/accounting/treasury review [issue #5](https://github.com/robyroro/recompensated/issues/5). These issues arrange and evidence the work but do not approve it.
+Tracking: use this standalone repository's public issue tracker once reviewers are engaged. Earlier private-application issues are intentionally not cited as public evidence. Issue tracking can arrange and evidence the work but does not approve it.
 
 ## Security review scope
 
@@ -36,4 +36,4 @@ A qualified reviewer must decide supported jurisdictions and currencies; operato
 | Accounting/treasury approval | Pending | — | — | Not approved |
 | Owner production decision | Pending | — | — | Not approved |
 
-PR readiness and merge do not equal production approval. Real money must remain disabled until every applicable row is approved and unresolved high/critical findings are closed.
+Repository readiness and grant eligibility do not equal production approval. Real money must remain disabled until every applicable row is approved and unresolved high/critical findings are closed. Independent review and remediation are proposed as a future NGI TALER milestone; completed approval is not represented as a prerequisite for submitting the R&D proposal.

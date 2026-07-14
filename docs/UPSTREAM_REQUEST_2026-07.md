@@ -8,7 +8,7 @@ Status: submitted to the public GNU Taler mailing list on 2026-07-12. No maintai
 
 ## Suggested message
 
-We are building LibreReward Bridge, an AGPL middleware sandbox demonstrator that creates exact-value bearer rewards with wallet-core peer-push debit. A funded valueless demo run used wallet CLI 1.6.10 / wallet protocol 7 / exchange protocol 34 and covered successful claim, recipient race, restart reconciliation, expiry, and insufficient balance.
+We are building LibreReward Bridge, an AGPL middleware sandbox demonstrator that creates exact-value bearer rewards with wallet-core peer-push debit. A pre-funded valueless demo-wallet run used wallet CLI 1.6.10 / wallet protocol 7 / exchange protocol 34 and covered successful claim, recipient race, restart reconciliation, expiry, and insufficient balance. “Pre-funded” describes the test-wallet balance, not grant support.
 
 The implementation currently calls `initiatePeerPushDebit`, waits for a shareable transaction state, stores the returned transaction ID, and reconciles with `getTransactionById`. We never automatically repeat initiation after an unknown timeout.
 
@@ -26,5 +26,5 @@ We can provide a minimal reproducer and sanitized public transaction IDs. We wil
 
 - Preferred public channel: `taler@gnu.org` or the GNU Taler/GNUnet bug tracker.
 - Submitted: email sent to `taler@gnu.org` on 2026-07-12; public archive URL pending.
-- Local tracking: [issue #6](https://github.com/robyroro/recompensated/issues/6).
+- Local tracking: `docs/UPSTREAM_REQUEST_2026-07.md`; create a public standalone issue when there is an archive URL or maintainer response to link.
 - Maintainer response and resulting action: pending.

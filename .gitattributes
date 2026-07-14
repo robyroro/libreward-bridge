@@ -1,0 +1,2 @@
+# Preserve the terminal whitespace of the required unedited NLnet GenAI output.
+docs/nlnet/GENAI_OUTPUT_2026-07-14.txt whitespace=-blank-at-eof
