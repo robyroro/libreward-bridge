@@ -4,7 +4,7 @@
 
 LibreReward Bridge is privacy-preserving middleware that lets a platform create an exact-value monetary reward, issue a single-use bearer claim, fund it from an operator-controlled GNU Taler wallet, observe its lifecycle, and receive signed webhooks. It is independent of any survey, loyalty, affiliate, gaming, or rewards platform.
 
-Maturity: **0.1.0 sandbox prototype**. The generic core, separate operator RBAC/API, payout/liquidity controls, automated retention, current wallet CLI compatibility, and a pre-funded valueless GNU Taler demo-wallet matrix have pre-application evidence. “Pre-funded” here describes test-wallet balance, not grant funding. The standalone CI workflow is active in the repository; its first public run is pending the push of that workflow. Independent security/privacy/legal/treasury approval is still pending; see `docs/SECURITY_PRIVACY_LEGAL_REVIEW.md`. Do not enable real-money production use.
+Maturity: **0.1.0 sandbox prototype**. The generic core, separate operator RBAC/API, payout/liquidity controls, automated retention, current wallet CLI compatibility, and a pre-funded valueless GNU Taler demo-wallet matrix have pre-application evidence. “Pre-funded” here describes test-wallet balance, not grant funding. The standalone CI workflow is active and its [first public run](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed the test, PostgreSQL integration, container and secret-scan jobs on 2026-07-14. Independent security/privacy/legal/treasury approval is still pending; see `docs/SECURITY_PRIVACY_LEGAL_REVIEW.md`. Do not enable real-money production use.
 
 ## Architecture
 
