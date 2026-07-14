@@ -1,6 +1,6 @@
 # Local verification — 2026-07-14
 
-This record describes the checks run against the working tree while preparing the NLnet NGI TALER application package. It is not a substitute for a public CI run or an independent security review.
+This record describes the checks run against the working tree while preparing the NLnet NGI TALER application package. Public CI evidence obtained after the initial push is recorded separately below. Neither local nor CI verification is a substitute for an independent security review.
 
 ## Environment
 
@@ -33,10 +33,10 @@ This record describes the checks run against the working tree while preparing th
 
 The integration suite exercised concurrent creation and claiming, idempotency conflicts, cancellation paths, provider cancellation, tenant isolation, signed webhooks, operator authorization and audit logging, atomic daily caps, fail-closed liquidity checks, retention, and cross-worker serialization.
 
-## Still requiring external evidence
+## Post-push evidence
 
-- The active GitHub Actions workflow must run after these changes are committed and pushed.
-- The Docker Compose job must run in GitHub Actions or on a machine with a container runtime; no local container runtime was available during this review.
+- The [first public GitHub Actions run](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed its test, PostgreSQL integration, Docker Compose and secret-scan jobs on 2026-07-14.
+- No local container runtime was available during this review; Compose evidence therefore comes from the public workflow.
 - The proposed independent security review is a future funded milestone and has not yet happened.
 
 The generated SBOM is intentionally treated as an ephemeral CI artifact and is not committed to the repository.

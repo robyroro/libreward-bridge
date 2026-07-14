@@ -8,8 +8,8 @@ Deadline: 1 August 2026, 12:00 CEST. Submit early and keep the confirmation emai
 - [x] Architecture, API, threat, privacy, operations and sandbox evidence.
 - [x] Active workflow stored under `.github/workflows/ci.yml`.
 - [x] All 11 standalone PostgreSQL 17.10 integration tests pass locally.
-- [ ] Push these changes and obtain passing standalone test, PostgreSQL integration, container and secret-scan jobs.
-- [ ] Correct or investigate every failed workflow before submission.
+- [x] Push these changes and obtain passing standalone test, PostgreSQL integration, container and secret-scan jobs.
+- [x] Correct or investigate every failed workflow before submission; the first public run completed without failures.
 - [ ] Confirm copyright/relicensing authority.
 - [ ] Record a public archive URL or response for the GNU Taler coordination request when available.
 

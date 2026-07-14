@@ -20,7 +20,7 @@
 - Reason: deleting accounting/audit evidence without an approved jurisdiction-specific period would be unsafe.
 - Next action: obtain the external decisions in `SECURITY_PRIVACY_LEGAL_REVIEW.md` and configure the approved periods.
 - Relevant files: `src/`, `migrations/001_initial.sql`, `migrations/002_operator_hardening.sql`, `tests/`.
-- Test coverage: on 2026-07-14 all 11 PostgreSQL 17.10 integration tests passed in the standalone checkout, covering 50-way create/claim concurrency, conflicting idempotency reuse, tenant isolation, operator RBAC/audit, atomic daily caps, retention, signed webhooks and cross-worker serialization. The new standalone workflow must still produce its own public run after push.
+- Test coverage: on 2026-07-14 all 11 PostgreSQL 17.10 integration tests passed both in the standalone checkout and in the [first public standalone workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289), covering 50-way create/claim concurrency, conflicting idempotency reuse, tenant isolation, operator RBAC/audit, atomic daily caps, retention, signed webhooks and cross-worker serialization.
 
 ## GNU Taler provider
 
@@ -58,10 +58,10 @@
 ## Hardening and public release
 
 - Completed: strict TypeScript, Biome, Vitest, an active standalone CI definition, non-root/read-only containers, Compose/PostgreSQL definitions, AGPL, SBOM and license checks, audit and secret-scan jobs, operator access controls, liquidity gates, retention automation, production runbooks, threat/privacy documentation, and an external-review package.
-- Partially completed: local unit/static/PostgreSQL gates and the prior pre-funded demo-wallet evidence pass; a public standalone container/secret-scan run, external reviews, upstream response, alert routing, and deployment-specific treasury/legal configuration remain.
+- Partially completed: local and public unit/static/PostgreSQL/container/secret-scan gates and the prior pre-funded demo-wallet evidence pass; external reviews, upstream response, alert routing, and deployment-specific treasury/legal configuration remain.
 - Blocked: real-money production approval is blocked on named independent reviewers and owner/legal/accounting sign-off. Sandbox development and grant submission preparation are not blocked by those production decisions.
 - Not started: independent penetration/privacy and qualified legal/accounting review.
 - Reason: external tooling/reviewer and owner/legal approval are required.
 - Next action: commission the reviews in `SECURITY_PRIVACY_LEGAL_REVIEW.md`, record evidence URLs/decisions, and close high/critical findings before merge or production.
 - Relevant files: `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `deployment/standalone-ci.yml`, `SECURITY.md`, `docs/LICENSING.md`.
-- Test coverage: on 2026-07-14 the standalone checkout passed formatter/lint/type/unit/provider/OpenAPI/build/audit/license checks and all 11 PostgreSQL 17.10 integration tests. This host still lacks a container runtime, so the active workflow's Compose and secret-scan jobs need a public GitHub run; none is claimed until visible.
+- Test coverage: on 2026-07-14 the standalone checkout passed formatter/lint/type/unit/provider/OpenAPI/build/audit/license checks and all 11 PostgreSQL 17.10 integration tests. This host lacks a container runtime, but the [public GitHub workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) independently passed the Compose and secret-scan jobs.

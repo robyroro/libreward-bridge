@@ -6,9 +6,9 @@
 - Automated cleanup covers terminal claim tokens, provider bearer ciphertext, webhook attempts, and revoked-key metadata. Core financial/event/audit retention remains an approved deployment policy because accounting and legal-hold requirements vary.
 - The claim URI is encrypted at rest but remains a bearer secret in the recipient browser and wallet handoff.
 - API/claim encryption keys have no online key ring; rotation requires a planned migration.
-- PostgreSQL 17.10 migrations and all eleven integration/concurrency tests passed in this standalone checkout on 2026-07-14 using a fresh isolated portable cluster. This host has no container runtime, so Compose build/start/health evidence still depends on the active GitHub workflow after push.
+- PostgreSQL 17.10 migrations and all eleven integration/concurrency tests passed in this standalone checkout on 2026-07-14 using a fresh isolated portable cluster. This host has no container runtime, but the [public standalone workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed Compose build/start/migration/health checks.
 - The dependency audit is clean at implementation time, but must be rerun for every release because registry advisories change.
-- The root GitHub workflow exists, but the standalone repository has no public run for it until these changes are pushed. Do not cite the earlier monorepo workflow as standalone evidence.
+- The root GitHub workflow's first public standalone run passed its test, container and secret-scan jobs on 2026-07-14. This standalone evidence supersedes the earlier monorepo run for current readiness claims.
 - No automatic cancellation of an already-created Taler purse is exposed to integrators; cancellation after claim start requires operator/provider review.
 - No liability funding/reserve accounting module is implemented; the operator must monitor the funding wallet and integrator credit risk.
 - Wallet liquidity monitoring is operational rather than treasury accounting: it does not replenish funds, segregate tenant reserves, forecast liabilities, or prove safeguarding compliance.
