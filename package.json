@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Privacy-preserving reward distribution middleware for GNU Taler",
   "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/robyroro/libreward-bridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robyroro/libreward-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robyroro/libreward-bridge/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.0.0"

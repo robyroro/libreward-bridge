@@ -1,14 +1,14 @@
 # Known limitations
 
-- The GNU Taler adapter is experimental. Current upstream wallet CLI 1.6.10 compatibility and a funded valueless demo matrix were verified, but the adapter still depends on wallet CLI development/testing interfaces and is not a hardened production wallet service.
+- The GNU Taler adapter is experimental. Current upstream wallet CLI 1.6.10 compatibility and a pre-funded valueless demo-wallet matrix were verified, but the adapter still depends on wallet CLI development/testing interfaces and is not a hardened production wallet service. “Pre-funded” describes the test-wallet balance, not grant funding.
 - `initiatePeerPushDebit` has no bridge-controlled idempotency key. Unknown timeouts require manual reconciliation and are not retried.
 - Operator HTTP access covers inspection, reconciliation, delivery retry, liquidity, retention, and audit history; account/key bootstrap and suspension remain CLI/database administration tasks.
 - Automated cleanup covers terminal claim tokens, provider bearer ciphertext, webhook attempts, and revoked-key metadata. Core financial/event/audit retention remains an approved deployment policy because accounting and legal-hold requirements vary.
 - The claim URI is encrypted at rest but remains a bearer secret in the recipient browser and wallet handoff.
 - API/claim encryption keys have no online key ring; rotation requires a planned migration.
-- PostgreSQL 17.10 migrations and integration/concurrency tests ran locally. This host has no container runtime, but GitHub Actions successfully builds the images, starts Compose, completes migration, validates worker liveness, and probes `/healthz` and `/readyz`.
+- PostgreSQL 17.10 migrations and all eleven integration/concurrency tests passed in this standalone checkout on 2026-07-14 using a fresh isolated portable cluster. This host has no container runtime, but the [public standalone workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed Compose build/start/migration/health checks.
 - The dependency audit is clean at implementation time, but must be rerun for every release because registry advisories change.
-- The root GitHub workflow passes; its action-version deprecation warnings are maintenance notices rather than test failures and should be addressed in a later dependency refresh.
+- The root GitHub workflow's first public standalone run passed its test, container and secret-scan jobs on 2026-07-14. This standalone evidence supersedes the earlier monorepo run for current readiness claims.
 - No automatic cancellation of an already-created Taler purse is exposed to integrators; cancellation after claim start requires operator/provider review.
 - No liability funding/reserve accounting module is implemented; the operator must monitor the funding wallet and integrator credit risk.
 - Wallet liquidity monitoring is operational rather than treasury accounting: it does not replenish funds, segregate tenant reserves, forecast liabilities, or prove safeguarding compliance.

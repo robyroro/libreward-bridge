@@ -8,30 +8,30 @@
 - Not started: upstream protocol contribution.
 - Reason: requires maintainer coordination and should not be inferred from local implementation authority.
 - Next action: monitor the public list, record the archive/reply, and implement or explicitly accept the resulting interface guidance.
-- Relevant files: root `docs/IMPLEMENTATION_AUDIT.md`, `docs/adr/*`, `openapi.yaml`, `docs/ARCHITECTURE.md`.
+- Relevant files: `docs/adr/*`, `openapi.yaml`, `docs/ARCHITECTURE.md`.
 - Test coverage: OpenAPI validator and state/money unit tests.
 
 ## Core service
 
-- Completed: PostgreSQL 17.10 migrations, tenant API keys, separate operator accounts/keys and viewer/operator/admin scopes, audited operator HTTP API, exact money, reward CRUD/cancel/regeneration/events, hashed claims, accessible claim interface, concurrent idempotency, atomic daily payout caps, and deterministic provider.
+- Completed: PostgreSQL 17.10 migrations, tenant API keys, separate operator accounts/keys and viewer/operator/admin scopes, audited operator HTTP API, exact money, reward CRUD/cancel/regeneration/events, hashed claims, accessibility-oriented claim interface, concurrent idempotency, atomic daily payout caps, and deterministic provider.
 - Partially completed: core financial/event/audit retention remains deployment-controlled pending approved accounting and legal-hold periods.
 - Blocked: none for the PostgreSQL-backed core.
 - Not started: production financial-record deletion, which intentionally awaits legal/accounting approval.
 - Reason: deleting accounting/audit evidence without an approved jurisdiction-specific period would be unsafe.
 - Next action: obtain the external decisions in `SECURITY_PRIVACY_LEGAL_REVIEW.md` and configure the approved periods.
 - Relevant files: `src/`, `migrations/001_initial.sql`, `migrations/002_operator_hardening.sql`, `tests/`.
-- Test coverage: PostgreSQL integration covers 50-way create/claim concurrency, conflicting idempotency reuse, tenant isolation, operator RBAC/audit, atomic daily caps, retention, and signed webhooks.
+- Test coverage: on 2026-07-14 all 11 PostgreSQL 17.10 integration tests passed both in the standalone checkout and in the [first public standalone workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289), covering 50-way create/claim concurrency, conflicting idempotency reuse, tenant isolation, operator RBAC/audit, atomic daily caps, retention, signed webhooks and cross-worker serialization.
 
 ## GNU Taler provider
 
-- Completed: provider contract, peer-push wallet-core CLI adapter, response/state validation, encrypted URI storage, mock/CLI contract tests, known-ID reconciliation, manual reconcile CLI, current official wallet CLI 1.6.10 `getVersion` verification, and funded valueless demo success/race/restart/expiry/insufficient-balance evidence.
+- Completed: provider contract, peer-push wallet-core CLI adapter, response/state validation, encrypted URI storage, mock/CLI contract tests, known-ID reconciliation, manual reconcile CLI, current official wallet CLI 1.6.10 `getVersion` verification, and pre-funded valueless demo-wallet success/race/restart/expiry/insufficient-balance evidence.
 - Partially completed: KYC thresholds were not deliberately triggered; initiation still lacks an upstream idempotency key; production certification is not claimed.
 - Blocked: none for the sandbox demonstrator. The current official CLI was built from upstream source because the registry package is stale.
 - Not started: upstream idempotency extension and production certification.
 - Reason: upstream changes and production compliance require external coordination.
 - Next action: discuss initiation idempotency with GNU Taler maintainers and define production KYC/liquidity controls before any real-money pilot.
 - Relevant files: `src/providers/`, `src/services/operation-worker.ts`, `docs/TALER_SETUP.md`.
-- Test coverage: deterministic 50-way provider idempotency test, direct API envelope/peer-push mapping, current error-envelope and timeout tests, real current CLI configuration check, and the funded evidence matrix in `docs/SANDBOX_EVIDENCE_2026-07-12.md`.
+- Test coverage: deterministic 50-way provider idempotency test, direct API envelope/peer-push mapping, current error-envelope and timeout tests, real current CLI configuration check, and the pre-funded demo-wallet evidence matrix in `docs/SANDBOX_EVIDENCE_2026-07-12.md`.
 
 ## Webhooks and operations
 
@@ -57,11 +57,11 @@
 
 ## Hardening and public release
 
-- Completed: strict TypeScript, Biome, Vitest, CI plus standalone template, non-root/read-only containers, Compose/PostgreSQL, AGPL, SBOM and license checks, audit and secret scanning, operator access controls, liquidity gates, retention automation, production runbooks, threat/privacy documentation, and an external-review package.
-- Partially completed: local gates and funded demo pass; external reviews, upstream response, alert routing, and deployment-specific treasury/legal configuration remain.
-- Blocked: production approval and merge decision are blocked on named independent reviewers and owner/legal/accounting sign-off.
+- Completed: strict TypeScript, Biome, Vitest, an active standalone CI definition, non-root/read-only containers, Compose/PostgreSQL definitions, AGPL, SBOM and license checks, audit and secret-scan jobs, operator access controls, liquidity gates, retention automation, production runbooks, threat/privacy documentation, and an external-review package.
+- Partially completed: local and public unit/static/PostgreSQL/container/secret-scan gates and the prior pre-funded demo-wallet evidence pass; external reviews, upstream response, alert routing, and deployment-specific treasury/legal configuration remain.
+- Blocked: real-money production approval is blocked on named independent reviewers and owner/legal/accounting sign-off. Sandbox development and grant submission preparation are not blocked by those production decisions.
 - Not started: independent penetration/privacy and qualified legal/accounting review.
 - Reason: external tooling/reviewer and owner/legal approval are required.
 - Next action: commission the reviews in `SECURITY_PRIVACY_LEGAL_REVIEW.md`, record evidence URLs/decisions, and close high/critical findings before merge or production.
-- Relevant files: `Dockerfile`, `docker-compose.yml`, root `.github/workflows/libreward-bridge-ci.yml`, `deployment/standalone-ci.yml`, `SECURITY.md`, `docs/LICENSING.md`.
-- Test coverage: local formatter/lint/type/unit/provider/OpenAPI/build/PostgreSQL validation plus passing GitHub Actions Compose build/start/health/readiness and secret-scan jobs.
+- Relevant files: `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `deployment/standalone-ci.yml`, `SECURITY.md`, `docs/LICENSING.md`.
+- Test coverage: on 2026-07-14 the standalone checkout passed formatter/lint/type/unit/provider/OpenAPI/build/audit/license checks and all 11 PostgreSQL 17.10 integration tests. This host lacks a container runtime, but the [public GitHub workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) independently passed the Compose and secret-scan jobs.

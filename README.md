@@ -1,8 +1,10 @@
 # LibreReward Bridge
 
+[![LibreReward Bridge CI](https://github.com/robyroro/libreward-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/robyroro/libreward-bridge/actions/workflows/ci.yml)
+
 LibreReward Bridge is privacy-preserving middleware that lets a platform create an exact-value monetary reward, issue a single-use bearer claim, fund it from an operator-controlled GNU Taler wallet, observe its lifecycle, and receive signed webhooks. It is independent of any survey, loyalty, affiliate, gaming, or rewards platform.
 
-Maturity: **0.1.0 production-hardening candidate**. The generic core, PostgreSQL concurrency flow, separate operator RBAC/API, payout/liquidity controls, automated retention, container CI, current wallet CLI compatibility, and a funded valueless GNU Taler demo matrix are verified. External security/privacy/legal/treasury approval is still pending; see `docs/SECURITY_PRIVACY_LEGAL_REVIEW.md`. Do not enable real-money production use.
+Maturity: **0.1.0 sandbox prototype**. The generic core, separate operator RBAC/API, payout/liquidity controls, automated retention, current wallet CLI compatibility, and a pre-funded valueless GNU Taler demo-wallet matrix have pre-application evidence. “Pre-funded” here describes test-wallet balance, not grant funding. The standalone CI workflow is active and its [first public run](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed the test, PostgreSQL integration, container and secret-scan jobs on 2026-07-14. Independent security/privacy/legal/treasury approval is still pending; see `docs/SECURITY_PRIVACY_LEGAL_REVIEW.md`. Do not enable real-money production use.
 
 ## Architecture
 
@@ -42,7 +44,7 @@ curl -sS http://localhost:8080/v1/rewards \
 
 Open the returned `claim_url`. With the mock provider, the flow is deterministic but does not transfer money. For GNU Taler setup, read `docs/TALER_SETUP.md`.
 
-For a guarded funded demo run, configure three distinct valueless wallet databases and run `npm run sandbox:evidence`. The command requires `LIBREREWARD_ENV=test`, an HTTPS demo exchange, a test currency, and the explicit confirmation `SANDBOX_EVIDENCE_CONFIRM=valueless-demo-only`; it emits only sanitized identifiers and states.
+For a guarded pre-funded demo-wallet run, configure three distinct valueless wallet databases and run `npm run sandbox:evidence`. The command requires `LIBREREWARD_ENV=test`, an HTTPS demo exchange, a test currency, and the explicit confirmation `SANDBOX_EVIDENCE_CONFIRM=valueless-demo-only`; it emits only sanitized identifiers and states.
 
 ## Safety properties
 
@@ -56,7 +58,7 @@ For a guarded funded demo run, configure three distinct valueless wallet databas
 - HTTPS-only, private-network-blocked webhooks by production default;
 - signed deterministic webhook payloads with bounded exponential retry;
 - CSP, no-store, no-referrer, no cookies, and no analytics on claim pages;
-- structured log redaction and low-cardinality metrics.
+- structured log redaction and low-cardinality metrics;
 - separate role-scoped operator keys, append-only operator audit events, and private-network deployment guidance;
 - atomic per-currency daily payout caps plus cached fail-closed wallet balance floors;
 - configurable daily retention with an admin dry-run and recorded execution counts.
@@ -94,4 +96,8 @@ Real operation requires a supported `taler-wallet-cli`, a dedicated funded walle
 
 ## License and contributing
 
-The server is licensed under AGPL-3.0-or-later to remain compatible with optional GPLv3+ wallet-core operation and to protect network-service improvements. See `LICENSE`, `docs/LICENSING.md`, `THIRD_PARTY_NOTICES.md`, `CONTRIBUTING.md`, and `SECURITY.md`. Owner/legal approval remains required before a public tag.
+The server is licensed under AGPL-3.0-or-later to remain compatible with optional GPLv3+ wallet-core operation and to protect network-service improvements. See `LICENSE`, `COPYRIGHT.md`, `docs/LICENSING.md`, `THIRD_PARTY_NOTICES.md`, `CONTRIBUTING.md`, and `SECURITY.md`. Generative-AI assistance is disclosed in `docs/GENAI_USAGE.md`; human contributors remain responsible for legality, correctness and quality.
+
+## NGI TALER application package
+
+The pre-application baseline and proposed future work are deliberately separated. The form-ready draft, costed milestones, comparison, GenAI prompt log, and final confirmation checklist are under `docs/nlnet/`. Private contact and eligibility facts belong in NLnet's form, not in this public repository.
