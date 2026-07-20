@@ -1,5 +1,7 @@
 # NGI TALER submission checklist
 
+> Superseded working checklist. Use the current `grant/` package and fill every `[OWNER INPUT REQUIRED]` field. Retained for proposal provenance.
+
 Deadline: 1 August 2026, 12:00 CEST. Submit early and keep the confirmation email.
 
 ## Repository evidence

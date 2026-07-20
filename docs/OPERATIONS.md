@@ -4,7 +4,11 @@
 
 Run one or more API processes and workers against PostgreSQL. Apply `node dist/src/cli.js migrate` before either starts. Migrations are ordered SQL files guarded by a PostgreSQL advisory lock. Back up PostgreSQL before upgrade and test restoration; do not silently skip a failed migration.
 
-The worker recovers provider and webhook rows left `processing` for more than two minutes. It does not retry an ambiguous wallet initiation without an external transaction ID. Readiness checks database connectivity and provider configuration; liveness checks only the process.
+Forwarded client IPs are ignored unless `LIBREREWARD_TRUST_PROXY` explicitly names a bounded hop count or trusted IP/CIDR list. Match this to the only reachable reverse-proxy path and test spoofed `X-Forwarded-For`; a wrong value weakens claim/API rate limits and audit context. Apply equivalent bearer-path redaction at the proxy.
+
+The worker recovers provider and webhook rows left `processing` for more than two minutes. It does not retry an ambiguous wallet initiation without an external transaction ID. API readiness checks database connectivity and, when fail-closed controls are enabled, current healthy liquidity; liveness checks only the process.
+
+The worker verifies the selected provider and exact wallet/API version before processing its first operation. An unsupported or malformed wallet response stops worker startup with no payout attempt.
 
 ## Secrets and rotation
 
@@ -14,7 +18,7 @@ Keep API-key hash, claim-token PRF, and AES data-encryption keys in a secret man
 
 Run `node dist/src/cli.js reconcile --reward rw_...`. Known wallet transaction IDs are queried through `getTransactionById`; `done` claims, terminal failure fails, and other states remain pending. For an ambiguous operation without an ID, inspect the dedicated wallet transaction list by amount, summary, creation time, and purse expiry. Never initiate a replacement until an operator has established that no purse exists. Record the decision outside raw secrets.
 
-The role-scoped operator HTTP API supports sanitized inspection, known-ID reconciliation, failed-delivery retry, queued liquidity checks, retention runs, and audit reads. Wallet-affecting operations are serialized across workers with a PostgreSQL advisory lock; the API never opens the wallet directly. The local CLI remains the bootstrap/break-glass boundary and supports the same diagnostics plus tenant/operator key lifecycle; stop workers before direct wallet CLI maintenance. Neither surface displays claim tokens, decrypted Taler URIs, API secrets, or webhook secrets. Keep `/v1/operator/*`, CLI, wallet, and database access on restricted operations networks.
+The role-scoped operator HTTP API supports sanitized inspection, known-ID reconciliation, failed-delivery retry, queued liquidity checks, retention runs, and audit reads. Wallet-affecting operations are serialized across workers with a PostgreSQL advisory lock; the API never opens the wallet directly. The local CLI remains the bootstrap/break-glass boundary and supports the same diagnostics plus tenant/operator key lifecycle. Before any direct wallet command: stop every Bridge worker for that wallet, verify the processes have exited, keep the persistent wallet server as the sole database owner, perform the read/maintenance action, record only sanitized evidence, and restart/reconcile before accepting claims. Neither surface displays claim tokens, decrypted Taler URIs, API secrets, or webhook secrets. Keep `/v1/operator/*`, CLI, wallet, and database access on restricted operations networks.
 
 ## Backup and restore
 

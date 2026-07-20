@@ -1,15 +1,16 @@
 # Known limitations
 
-- The GNU Taler adapter is experimental. Current upstream wallet CLI 1.6.10 compatibility and a pre-funded valueless demo-wallet matrix were verified, but the adapter still depends on wallet CLI development/testing interfaces and is not a hardened production wallet service. “Pre-funded” describes the test-wallet balance, not grant funding.
-- `initiatePeerPushDebit` has no bridge-controlled idempotency key. Unknown timeouts require manual reconciliation and are not retried.
-- Operator HTTP access covers inspection, reconciliation, delivery retry, liquidity, retention, and audit history; account/key bootstrap and suspension remain CLI/database administration tasks.
-- Automated cleanup covers terminal claim tokens, provider bearer ciphertext, webhook attempts, and revoked-key metadata. Core financial/event/audit retention remains an approved deployment policy because accounting and legal-hold requirements vary.
-- The claim URI is encrypted at rest but remains a bearer secret in the recipient browser and wallet handoff.
-- API/claim encryption keys have no online key ring; rotation requires a planned migration.
-- PostgreSQL 17.10 migrations and all eleven integration/concurrency tests passed in this standalone checkout on 2026-07-14 using a fresh isolated portable cluster. This host has no container runtime, but the [public standalone workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) passed Compose build/start/migration/health checks.
-- The dependency audit is clean at implementation time, but must be rerun for every release because registry advisories change.
-- The root GitHub workflow's first public standalone run passed its test, container and secret-scan jobs on 2026-07-14. This standalone evidence supersedes the earlier monorepo run for current readiness claims.
-- No automatic cancellation of an already-created Taler purse is exposed to integrators; cancellation after claim start requires operator/provider review.
-- No liability funding/reserve accounting module is implemented; the operator must monitor the funding wallet and integrator credit risk.
-- Wallet liquidity monitoring is operational rather than treasury accounting: it does not replenish funds, segregate tenant reserves, forecast liabilities, or prove safeguarding compliance.
-- Independent security/privacy review and qualified legal/accounting approval remain pending; the local review package is not a substitute.
+- v0.1.0-alpha.1 is a research prototype demonstrated only with mock and valueless GNU Taler currency. It is not approved for real money.
+- Exact wallet-core 1.6.10 and 1.6.12 / API 7:0:0 are gated. Persistent RPC plus stable transaction polling is implemented, but the operator service boundary and state semantics still need upstream confirmation. The testing wait API remains only in an explicit non-production compatibility path.
+- `initiatePeerPushDebit` has no Bridge-controlled upstream idempotency key. Unknown initiation outcomes require manual reconciliation and are never automatically retried.
+- One wallet server owns a wallet database. PostgreSQL serializes Bridge calls, but direct CLI tools are outside that lock and require stopping workers.
+- Encryption and claim-PRF keys have no online key ring. Blind rotation can invalidate active claims or encrypted values.
+- Claim links and Taler URIs remain bearer capabilities in recipient delivery/browser/wallet paths.
+- Tenant metadata can contain personal data; it is bounded and can be disabled but cannot be semantically classified by the service.
+- Financial/event/audit retention, legal holds, backup expiry, operator jurisdictions, KYC/AML/sanctions, safeguarding, tax/accounting, and refund duties require external decisions.
+- Liquidity checks are operational signals, not reserve segregation, solvency proof, replenishment, or treasury accounting.
+- Cancellation after claim start is not a tenant operation; abort/recovery needs operator and provider reconciliation.
+- Independent security, privacy, accessibility, legal, and treasury reviews are pending. AI, automated, maintainer, and owner review are not independent.
+- Registry advisories, base images, public sandbox services, and upstream APIs change; audit, SBOM, container, and interoperability evidence must be regenerated for each release.
+
+Historical sanitized evidence remains useful but does not replace a current reproduction at the target commit. See [Taler compatibility](TALER_COMPATIBILITY.md) and [external review index](EXTERNAL_REVIEW_INDEX.md).

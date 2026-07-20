@@ -1,5 +1,7 @@
 CALL: NGI TALER
 
+SUPERSEDED WORKING DRAFT — DO NOT SUBMIT. The current application draft is grant/APPLICATION_DRAFT.md. This text is retained as genuine revision provenance.
+
 CONTACT INFORMATION
 
 Name: robyroro (public alias; legal name can be supplied privately if selected)

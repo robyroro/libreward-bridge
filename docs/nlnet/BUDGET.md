@@ -1,5 +1,7 @@
 # Proposed NGI TALER budget
 
+> Superseded working draft. The current €42,000 work-package budget is [grant/BUDGET_RATIONALE.md](../../grant/BUDGET_RATIONALE.md). Retained for genuine proposal revision provenance; do not submit this version.
+
 This budget covers new work after an MoU. The 0.1 prototype is prior work and is not a payable milestone.
 
 | Task | Applicant hours | Rate | Labour | External cost | Total |

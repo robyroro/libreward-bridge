@@ -44,16 +44,14 @@
 - Relevant files: `src/services/webhook-service.ts`, `src/domain/webhook-signing.ts`, `docs/API.md`, `docs/THREAT_MODEL.md`.
 - Test coverage: signature/timestamp/tamper unit tests plus PostgreSQL-backed local HTTP delivery and persistence integration test.
 
-## Commercial-platform reference adapter
+## Generic integration ecosystem
 
-- Completed: isolation, state/accounting mapping, two false-by-default sandbox flags, example client boundary, and raw-body webhook verifier boundary.
-- Partially completed: reference code is not wired into the commercial application.
-- Blocked: production/business approval for currency, liability, refunds, and user exposure.
-- Not started: migration/UI/webhook route in the commercial application.
-- Reason: the request forbids production enablement and requires the generic core first; owner decisions remain.
-- Next action: none in this workstream; Recompensated integration is explicitly excluded.
-- Relevant files: `docs/RECOMPENSATED_REFERENCE_INTEGRATION.md`, `examples/recompensated-adapter/`.
-- Test coverage: example translation tests remain to add when integrated with Laravel.
+- Completed: typed SDK coverage for rewards and webhook endpoints, structured errors/timeouts, signature verification, OpenAPI route drift check, and a platform-neutral reference integrator.
+- Partially completed: generated multi-language clients and a packaged standalone webhook verifier are future work.
+- Blocked: none for alpha documentation.
+- Next action: expand conformance and failure examples under grant WP4.
+- Relevant files: `sdk/typescript/client.ts`, `examples/reference-integrator/`, `openapi.yaml`.
+- Test coverage: SDK request, error, redirect, path encoding, and signature-window unit tests.
 
 ## Hardening and public release
 
@@ -63,5 +61,5 @@
 - Not started: independent penetration/privacy and qualified legal/accounting review.
 - Reason: external tooling/reviewer and owner/legal approval are required.
 - Next action: commission the reviews in `SECURITY_PRIVACY_LEGAL_REVIEW.md`, record evidence URLs/decisions, and close high/critical findings before merge or production.
-- Relevant files: `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `deployment/standalone-ci.yml`, `SECURITY.md`, `docs/LICENSING.md`.
+- Relevant files: `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `SECURITY.md`, `docs/LICENSING.md`.
 - Test coverage: on 2026-07-14 the standalone checkout passed formatter/lint/type/unit/provider/OpenAPI/build/audit/license checks and all 11 PostgreSQL 17.10 integration tests. This host lacks a container runtime, but the [public GitHub workflow](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) independently passed the Compose and secret-scan jobs.

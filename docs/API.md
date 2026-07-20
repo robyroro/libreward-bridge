@@ -6,7 +6,11 @@ Operator calls use a distinct `Authorization: Bearer lro_<prefix>.<secret>`, sep
 
 `POST /v1/rewards` requires `Idempotency-Key`. Keys are tenant-scoped. The server fingerprints the normalized amount, description, opaque reference, metadata, and expiry. An identical replay returns HTTP 200 and the same logical result; a changed body returns `idempotency_conflict`. Keep keys stable for a business event.
 
+After terminal claim-token retention has removed the capability material, an identical replay still returns the original reward with `claim_url: null`; a secret link cannot be reconstructed after deletion.
+
 Amounts use `CURRENCY:value[.fraction]`, up to eight fractional digits, for example `EUR:2.5` or `KUDOS:0.00000001`. Configured currencies and maximum whole value are enforced.
+
+Reward events are reverse chronological. Pass the opaque `next_cursor` unchanged; it encodes both timestamp and event row ID so events with identical timestamps are not skipped. Invalid or constructed cursors return `invalid_cursor`.
 
 Errors use:
 
@@ -28,5 +32,7 @@ if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected))
 ```
 
 Delivery is at least once. A 2xx response acknowledges it. Retries are bounded exponential backoff; event IDs make duplicates identifiable.
+
+`POST /v1/webhook-endpoints/:id/rotate-secret` returns a new secret once and invalidates the prior signing secret immediately. Coordinate receiver rollout to avoid rejected in-flight deliveries. Set `METADATA_ENABLED=false` to reject non-empty metadata; when enabled, metadata remains scalar-only and bounded. The complete endpoint/status/schema contract is validated against implemented Fastify routes in CI.
 
 API `/v1` remains backward compatible within the pre-1.0 line where practical. Breaking semantics require a documented deprecation window or a new versioned path. Database structure is not a public contract.

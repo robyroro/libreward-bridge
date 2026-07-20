@@ -52,7 +52,7 @@ taler-wallet-cli --wallet-db=/secure/libreward-wallet.sqlite3 p2p initiate-push-
 taler-wallet-cli --wallet-db=/secure/libreward-wallet.sqlite3 transactions
 ```
 
-The output must contain a pending/ready `peer-push-debit` transaction and a `taler://pay-push/` URI. Import that URI into the separate recipient wallet, confirm it there, and only then run each wallet until done. Do not count QR rendering or a mock-provider URI as a successful Taler transaction. The Bridge adapter uses the direct `testingWaitTransactionState` wallet API to wait only until the debit is ready or terminal; this is a development/testing interface and one reason the adapter remains pre-release.
+The output must contain a pending/ready `peer-push-debit` transaction and a `taler://pay-push/` URI. Import that URI into the separate recipient wallet, confirm it there, and only then run each wallet until done. Do not count QR rendering or a mock-provider URI as a successful Taler transaction. LibreReward's preferred path polls stable `getTransactionById` over a persistent wallet RPC connection. The testing wait API is available only through an explicit valueless-sandbox compatibility flag and is forbidden in production mode.
 
 ## Configure LibreReward
 
@@ -63,11 +63,22 @@ TALER_WALLET_CLI=taler-wallet-cli
 TALER_WALLET_CLI_NODE_SCRIPT=
 TALER_WALLET_CRYPTO_WORKER=
 TALER_WALLET_DB=/secure/libreward-wallet.sqlite3
+TALER_WALLET_CONNECTION=/secure/run/libreward-wallet.sock
+TALER_WALLET_ALLOW_TESTING_API=false
 TALER_WALLET_COMMAND_TIMEOUT_MS=60000
 TALER_EXCHANGE_BASE_URL=https://exchange.demo.taler.net/
 TALER_ALLOW_HTTP=false
 SUPPORTED_CURRENCIES=TESTKUDOS
 ```
+
+Start the single wallet owner before the Bridge worker:
+
+```sh
+taler-wallet-cli --wallet-db=/secure/libreward-wallet.sqlite3 advanced serve \
+  --unix-path=/secure/run/libreward-wallet.sock
+```
+
+The exact CLI flags remain an upstream compatibility question; verify them against the supported source revision and [compatibility matrix](TALER_COMPATIBILITY.md). Never start another process against the same wallet database. Stop the Bridge worker before direct wallet CLI maintenance.
 
 Then run:
 
@@ -117,4 +128,4 @@ Capture sanitized command versions, public transaction IDs, state changes, and w
 
 ## Current boundary
 
-The current host verified source compilation, wallet `getVersion`, Bridge `provider:check`, PostgreSQL flows, and the funded valueless matrix. This does not certify production readiness. Do not run multiple wallet processes against the same database without upstream-supported serialization, and do not enable real money until liquidity procedures, production KYC handling, an external security review, and owner/legal decisions are complete.
+Historical evidence verified source compilation, wallet `getVersion`, Bridge `provider:check`, PostgreSQL flows, and a funded valueless matrix. This does not certify production readiness. Current exact supported versions and remaining upstream questions are documented in [TALER_COMPATIBILITY.md](TALER_COMPATIBILITY.md). Do not enable real money until interoperability, independent review, and owner legal/treasury decisions are complete.

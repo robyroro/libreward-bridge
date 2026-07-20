@@ -1,17 +1,11 @@
 # Public project status
 
-Last updated: 2026-07-14.
+Last updated: 2026-07-20.
 
-## Pre-application baseline
+LibreReward Bridge v0.1.0-alpha.1 is a public research prototype for exact-value, single-use GNU Taler reward claims. Existing feasibility work includes the generic API/worker/PostgreSQL model, tenant/operator controls, mock end-to-end flow, preliminary wallet provider, signed webhooks, liquidity/retention, OpenAPI/SDK, claim UX, tests, deployment material, and sanitized valueless sandbox evidence.
 
-LibreReward Bridge 0.1.0 is a public sandbox prototype for exact-value, single-use GNU Taler reward claims. The generic API, worker, PostgreSQL state model, wallet CLI adapter, mock-provider flow, operator controls, data-minimizing claim pages, OpenAPI contract, and deployment documentation exist before any proposed NGI TALER grant.
+The current adapter prefers persistent wallet RPC and stable status polling; its exact wallet versions are gated. Upstream confirmation, reproducible current interoperability evidence, independent reviews, online key rotation, and operator legal/treasury decisions remain future work. No real-money approval is claimed.
 
-Local verification on 2026-07-14 passed formatting, linting, type checking, 25 unit tests, all 11 PostgreSQL 17.10 integration tests, OpenAPI validation, build, the production dependency audit, and the production license allowlist. The integration run used a fresh isolated cluster from the portable PostgreSQL distribution already present on this host. The [first public standalone GitHub Actions run](https://github.com/robyroro/libreward-bridge/actions/runs/29366192289) subsequently passed the test, PostgreSQL integration, container and secret-scan jobs.
+The proposed NGI work and €42,000 budget are in [`grant/`](../grant/). They fund future upstream alignment, testbed, independent review/remediation, reusable integration outputs, accessibility, and operations—not completed prototype work. Owner identity/eligibility/dates and other private facts remain `[OWNER INPUT REQUIRED]`.
 
-The wallet adapter remains experimental. It uses a development/testing wallet-core operation, lacks a caller-controlled idempotency key for peer-push initiation, and is not approved for real-money production use.
-
-## Proposed next phase
-
-The proposed NGI TALER work is defined in `docs/nlnet/PROPOSAL_DRAFT.txt` and `docs/nlnet/BUDGET.md`. It begins after an MoU and does not request payment for the pre-application baseline.
-
-If funded, this page will be updated at least every two months with milestone status, links to published outputs, tests, upstream discussions, audit findings and dispositions, accessibility evidence, releases, and changes to schedule or scope.
+Current commands and evidence locations are enumerated in [EXTERNAL_REVIEW_INDEX.md](EXTERNAL_REVIEW_INDEX.md). Historical 2026-07 evidence is retained with its date; it must not be represented as a current release run without reproduction.

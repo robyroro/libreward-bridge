@@ -36,4 +36,6 @@ A qualified reviewer must decide supported jurisdictions and currencies; operato
 | Accounting/treasury approval | Pending | — | — | Not approved |
 | Owner production decision | Pending | — | — | Not approved |
 
+Independent accessibility review is also pending and not approved; track it in `EXTERNAL_REVIEW_INDEX.md`.
+
 Repository readiness and grant eligibility do not equal production approval. Real money must remain disabled until every applicable row is approved and unresolved high/critical findings are closed. Independent review and remediation are proposed as a future NGI TALER milestone; completed approval is not represented as a prerequisite for submitting the R&D proposal.
