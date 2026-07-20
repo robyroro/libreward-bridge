@@ -24,4 +24,10 @@ describe("cryptographic helpers", () => {
     expect(decrypt(key, envelope)).toBe("secret");
     expect(() => decrypt(Buffer.alloc(32, 8), envelope)).toThrow();
   });
+  it("rejects non-canonical and truncated encrypted envelopes", () => {
+    const key = Buffer.alloc(32, 7);
+    const envelope = encrypt(key, "secret");
+    expect(() => decrypt(key, `${envelope}=`)).toThrow();
+    expect(() => decrypt(key, Buffer.alloc(20).toString("base64url"))).toThrow();
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../../src/config.js";
+import { loadConfig, parseTrustProxy } from "../../src/config.js";
 
 const base = {
   DATABASE_URL: "postgres://localhost/test",
@@ -43,5 +43,39 @@ describe("configuration", () => {
     });
     expect(config.dailyPayoutLimits.get("KUDOS")?.value).toBe(100n);
     expect(config.liquidityMinimums.get("EUR")?.value).toBe(5n);
+  });
+
+  it("requires an explicit, bounded proxy trust policy", () => {
+    expect(parseTrustProxy("false")).toBe(false);
+    expect(parseTrustProxy("2")).toBe(2);
+    expect(parseTrustProxy("127.0.0.1, 10.0.0.0/8")).toEqual(["127.0.0.1", "10.0.0.0/8"]);
+    expect(() => parseTrustProxy("true")).toThrow(/unsafe/);
+    expect(() => parseTrustProxy("11")).toThrow();
+    expect(() => parseTrustProxy("not-an-address")).toThrow();
+  });
+
+  it("requires stable wallet RPC unless sandbox compatibility is explicit", () => {
+    expect(() => loadConfig({ ...base, PROVIDER: "taler-wallet-cli" })).toThrow(
+      /TALER_WALLET_CONNECTION/,
+    );
+    expect(() =>
+      loadConfig({
+        ...base,
+        PROVIDER: "taler-wallet-cli",
+        TALER_WALLET_CONNECTION: "/run/taler/wallet.sock",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      loadConfig({
+        ...base,
+        PROVIDER: "taler-wallet-cli",
+        TALER_WALLET_ALLOW_TESTING_API: "true",
+      }),
+    ).not.toThrow();
+  });
+
+  it("caps reward values at the database-safe aggregate limit", () => {
+    expect(() => loadConfig({ ...base, MAX_REWARD_VALUE: "92233720367" })).not.toThrow();
+    expect(() => loadConfig({ ...base, MAX_REWARD_VALUE: "92233720368" })).toThrow();
   });
 });

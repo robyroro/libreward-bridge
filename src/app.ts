@@ -16,6 +16,7 @@ import { OperatorService } from "./services/operator-service.js";
 import { RetentionService } from "./services/retention-service.js";
 import { RewardService } from "./services/reward-service.js";
 import { WebhookService } from "./services/webhook-service.js";
+import { maturityStatement, projectName, projectVersion } from "./version.js";
 
 const rewardInput = z
   .object({
@@ -24,6 +25,7 @@ const rewardInput = z
     external_reference: z.string().trim().min(1).max(128).optional(),
     metadata: z
       .record(z.string().max(64), z.union([z.string().max(512), z.number(), z.boolean(), z.null()]))
+      .refine((metadata) => Object.keys(metadata).length <= 32, "metadata has more than 32 keys")
       .optional(),
     expires_at: z.iso.datetime({ offset: true }).optional(),
   })
@@ -53,7 +55,7 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
   const app = Fastify({
     bodyLimit: 16 * 1024,
     requestIdHeader: "x-request-id",
-    trustProxy: false,
+    trustProxy: config.trustProxy,
     logger: {
       level: config.LOG_LEVEL,
       redact: {
@@ -151,10 +153,11 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
     }
   });
   app.get("/version", async () => ({
-    name: "libreward-bridge",
-    version: "0.1.0",
+    name: projectName,
+    version: projectVersion,
     api: "v1",
     taler_flow: "wallet-core-peer-push",
+    maturity: maturityStatement,
   }));
   app.get("/metrics", async (_request, reply) => {
     if (!config.METRICS_ENABLED) throw new AppError(404, "not_found", "Resource not found");
@@ -171,11 +174,10 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
         .max(128)
         .regex(/^[A-Za-z0-9._:-]+$/)
         .parse(request.headers["idempotency-key"]);
-      const result = await rewards.create(
-        requireTenant(request),
-        key,
-        rewardInput.parse(request.body),
-      );
+      const input = rewardInput.parse(request.body);
+      if (!config.METADATA_ENABLED && input.metadata && Object.keys(input.metadata).length > 0)
+        throw new AppError(422, "metadata_disabled", "Reward metadata is disabled");
+      const result = await rewards.create(requireTenant(request), key, input);
       return reply.status(result.idempotent ? 200 : 201).send(result);
     },
   );
@@ -207,7 +209,7 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
       const operator = requireOperator(request);
       const reference = referenceParam(request);
       const reward = await operators.reward(reference);
-      const result = await operators.events(reference);
+      const result = await operators.events(reward.public_id);
       await operators.audit(operator, "reward.events.read", "reward", reward.public_id, request.id);
       return result;
     },
@@ -222,7 +224,7 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
       const operator = requireOperator(request);
       const reference = referenceParam(request);
       const reward = await operators.reward(reference);
-      const result = await operators.deliveries(reference);
+      const result = await operators.deliveries(reward.public_id);
       await operators.audit(
         operator,
         "webhook.deliveries.read",
@@ -404,6 +406,11 @@ export function buildApp(pool: pg.Pool, config: Config, provider: RewardPaymentP
     async (request, reply) =>
       reply.status(202).send(await webhooks.queueTest(requireTenant(request), idParam(request))),
   );
+  app.post(
+    "/v1/webhook-endpoints/:id/rotate-secret",
+    { preHandler: authenticate(pool, config, "webhooks:write") },
+    async (request) => webhooks.rotateSecret(requireTenant(request), idParam(request)),
+  );
 
   const claimRate = {
     config: { rateLimit: { max: config.CLAIM_RATE_LIMIT_MAX, timeWindow: "1 minute" } },
@@ -475,13 +482,16 @@ function escape(value: unknown): string {
   );
 }
 function shell(title: string, body: string, refresh?: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ""}<title>${escape(title)} — LibreReward</title><style>:root{color-scheme:dark light;font:16px system-ui}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#10141f;color:#eef2ff}.card{width:min(92vw,34rem);padding:2rem;border:1px solid #394159;border-radius:1rem;background:#191f2d;box-shadow:0 1rem 3rem #0005}h1{margin-top:0}.amount{font-size:2rem;font-weight:750;color:#76e0b5}.muted{color:#b5bdd0}.button{display:inline-block;border:0;border-radius:.65rem;background:#76e0b5;color:#07140f;padding:.8rem 1.15rem;font:inherit;font-weight:700;cursor:pointer}img{max-width:100%;background:white;border-radius:.5rem;padding:.5rem}a{color:#76e0b5;overflow-wrap:anywhere}@media(prefers-color-scheme:light){body{background:#f4f6fb;color:#172033}.card{background:white;border-color:#d9deea}.muted{color:#566078}}</style></head><body><main class="card">${body}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ""}<title>${escape(title)} — LibreReward Bridge</title><style>:root{color-scheme:dark light;font:16px/1.5 system-ui,sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#10141f;color:#f4f6ff}.card{box-sizing:border-box;width:min(92vw,34rem);padding:2rem;border:1px solid #56617e;border-radius:1rem;background:#191f2d;box-shadow:0 1rem 3rem #0005}h1{margin-top:0;line-height:1.2}.amount{font-size:2rem;font-weight:750;color:#8ce8c6}.muted{color:#c4cada}.warning{padding:.8rem;border-left:.3rem solid #ffd166;background:#2b2a20}.button{display:inline-block;border:0;border-radius:.65rem;background:#8ce8c6;color:#07140f;padding:.8rem 1.15rem;font:inherit;font-weight:700;cursor:pointer;text-decoration:none}.button:focus-visible,a:focus-visible{outline:.2rem solid #ffd166;outline-offset:.2rem}img{box-sizing:border-box;max-width:100%;height:auto;background:white;border-radius:.5rem;padding:.5rem}a{color:#8ce8c6;overflow-wrap:anywhere}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}@media(prefers-color-scheme:light){body{background:#f4f6fb;color:#172033}.card{background:white;border-color:#9ba5bd}.muted{color:#4a5368}.warning{background:#fff8df}.button{background:#08795b;color:white}a{color:#08664f}}</style></head><body><main class="card" id="main-content">${body}</main></body></html>`;
 }
 function claimPage(reward: Record<string, unknown>, token: string): string {
-  const disabled = reward.status !== "claimable";
+  const timeExpired =
+    typeof reward.expires_at === "string" && new Date(reward.expires_at).getTime() <= Date.now();
+  const status = timeExpired && reward.status === "claimable" ? "expired" : reward.status;
+  const disabled = status !== "claimable";
   return shell(
     "Claim reward",
-    `<p class="muted">LibreReward Bridge</p><h1>Claim reward</h1><p class="amount">${escape(reward.amount)}</p><p>${escape(reward.description)}</p><p class="muted">Expires ${escape(reward.expires_at)}</p><p>Status: <strong>${escape(reward.status)}</strong></p>${disabled ? "<p>This reward cannot be started.</p>" : `<form method="post" action="/claim/${encodeURIComponent(token)}/start"><button class="button" type="submit">Continue to GNU Taler</button></form>`}<p class="muted">No account or personal information is required.</p>`,
+    `<p class="muted">LibreReward Bridge</p><h1>Claim reward</h1><p class="amount">${escape(reward.amount)}</p><p>${escape(reward.description)}</p><p class="muted">Expires ${escape(reward.expires_at)}</p><p role="status" aria-live="polite">Status: <strong>${escape(status)}</strong></p>${disabled ? `<p>${terminalClaimMessage(status)}</p>` : `<form method="post" action="/claim/${encodeURIComponent(token)}/start"><button class="button" type="submit">Prepare reward in GNU Taler</button></form>`}<p class="muted">No recipient account or identity information is requested. This page uses no cookies, analytics, or third-party assets.</p>`,
   );
 }
 function statusPage(result: Record<string, unknown>, token: string, qr: string | null): string {
@@ -489,7 +499,24 @@ function statusPage(result: Record<string, unknown>, token: string, qr: string |
   const pending = result.status === "claim_in_progress" && !uri;
   return shell(
     "Reward status",
-    `<p class="muted">LibreReward Bridge</p><h1>Reward status</h1><p class="amount">${escape(result.amount)}</p><p>Status: <strong>${escape(result.status)}</strong></p>${uri ? `<p><a class="button" href="${escape(uri)}">Open GNU Taler wallet</a></p>${qr ? `<img alt="QR code for the GNU Taler claim" src="${qr}">` : ""}<p class="muted">The QR code contains a bearer payment URI. Do not share it.</p>` : pending ? "<p>Preparing the one-time wallet claim…</p>" : ""}`,
+    `<p class="muted">LibreReward Bridge</p><h1>Reward status</h1><p class="amount">${escape(result.amount)}</p><p role="status" aria-live="polite">Status: <strong>${escape(result.status)}</strong></p>${uri ? `<p class="warning"><strong>Keep this capability private.</strong> Anyone with the QR code or GNU Taler URI may claim the reward until it is used or expires.</p><p><a class="button" href="${escape(uri)}">Open this reward in GNU Taler</a></p>${qr ? `<img alt="QR code containing the same GNU Taler bearer reward URI as the link above" src="${qr}"><p>Alternatively, use the “Open this reward” link on this device. The QR code is for scanning with a GNU Taler wallet on another device.</p>` : ""}` : pending ? `<p>Preparing the one-time wallet claim…</p><p><a href="/claim/${encodeURIComponent(token)}/status">Refresh reward status</a></p>` : `<p>${terminalClaimMessage(result.status)}</p>`}`,
     pending ? `2;url=/claim/${encodeURIComponent(token)}/status` : undefined,
   );
+}
+
+function terminalClaimMessage(status: unknown): string {
+  switch (status) {
+    case "expired":
+      return "This reward has expired and can no longer be claimed.";
+    case "cancelled":
+      return "This reward was cancelled and can no longer be claimed.";
+    case "failed":
+      return "This reward could not be prepared. Contact the organization that issued it.";
+    case "claimed":
+      return "This reward has already been claimed.";
+    case "reconciliation_required":
+      return "This reward is awaiting operator reconciliation. It will not be issued again automatically.";
+    default:
+      return "This reward cannot be started in its current state.";
+  }
 }

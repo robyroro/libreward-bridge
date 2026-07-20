@@ -1,5 +1,8 @@
+import ipaddr from "ipaddr.js";
 import { z } from "zod";
 import { type Money, parseAmount } from "./domain/money.js";
+
+const MAX_DATABASE_SAFE_WHOLE_VALUE = 92_233_720_367;
 
 const boolString = (defaultValue: "true" | "false" = "false") =>
   z
@@ -13,6 +16,7 @@ const schema = z
     LIBREREWARD_HOST: z.string().default("0.0.0.0"),
     LIBREREWARD_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     LIBREREWARD_PUBLIC_URL: z.string().url().default("http://localhost:8080"),
+    LIBREREWARD_TRUST_PROXY: z.string().default("false"),
     DATABASE_URL: z.string().min(1),
     API_KEY_HASH_SECRET: z.string().min(32),
     OPERATOR_API_KEY_HASH_SECRET: z.string().min(32),
@@ -24,6 +28,8 @@ const schema = z
     TALER_WALLET_CRYPTO_WORKER: z.enum(["sync", "node-worker-thread"]).optional().or(z.literal("")),
     TALER_WALLET_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
     TALER_WALLET_DB: z.string().default("/data/taler-wallet.sqlite3"),
+    TALER_WALLET_CONNECTION: z.string().optional().or(z.literal("")),
+    TALER_WALLET_ALLOW_TESTING_API: boolString(),
     TALER_EXCHANGE_BASE_URL: z.string().url().optional().or(z.literal("")),
     TALER_ALLOW_HTTP: boolString(),
     SUPPORTED_CURRENCIES: z.string().default("KUDOS,TESTKUDOS"),
@@ -32,8 +38,9 @@ const schema = z
       .number()
       .int()
       .positive()
-      .max(Number.MAX_SAFE_INTEGER)
+      .max(MAX_DATABASE_SAFE_WHOLE_VALUE)
       .default(1_000_000),
+    METADATA_ENABLED: boolString("true"),
     DAILY_PAYOUT_LIMITS: z.string().default(""),
     LIQUIDITY_MIN_BALANCES: z.string().default(""),
     LIQUIDITY_MAX_AGE_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
@@ -120,6 +127,13 @@ const schema = z
         message: "production requires daily payout limits and minimum wallet balances",
       });
     }
+    if (env.TALER_WALLET_ALLOW_TESTING_API) {
+      context.addIssue({
+        code: "custom",
+        path: ["TALER_WALLET_ALLOW_TESTING_API"],
+        message: "the testing wallet API compatibility mode is forbidden in production",
+      });
+    }
   });
 
 export type Config = ReturnType<typeof loadConfig>;
@@ -136,6 +150,16 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env) {
   );
   const dailyPayoutLimits = amountMap(env.DAILY_PAYOUT_LIMITS, supportedCurrencies);
   const liquidityMinimums = amountMap(env.LIQUIDITY_MIN_BALANCES, supportedCurrencies);
+  const trustProxy = parseTrustProxy(env.LIBREREWARD_TRUST_PROXY);
+  if (
+    env.PROVIDER === "taler-wallet-cli" &&
+    !env.TALER_WALLET_CONNECTION &&
+    !env.TALER_WALLET_ALLOW_TESTING_API
+  ) {
+    throw new Error(
+      "taler-wallet-cli requires TALER_WALLET_CONNECTION or the explicit valueless-sandbox TALER_WALLET_ALLOW_TESTING_API=true compatibility flag",
+    );
+  }
   if (env.LIBREREWARD_ENV === "production") {
     for (const currency of supportedCurrencies) {
       if (!dailyPayoutLimits.has(currency) || !liquidityMinimums.has(currency))
@@ -148,7 +172,38 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env) {
     supportedCurrencies,
     dailyPayoutLimits,
     liquidityMinimums,
+    trustProxy,
   };
+}
+
+export type TrustProxyConfig = false | number | string[];
+
+export function parseTrustProxy(input: string): TrustProxyConfig {
+  const value = input.trim();
+  if (value === "false") return false;
+  if (/^[1-9][0-9]?$/.test(value)) {
+    const hops = Number(value);
+    if (hops <= 10) return hops;
+  }
+  if (/^[0-9]+$/.test(value))
+    throw new Error("LIBREREWARD_TRUST_PROXY hop count must be between 1 and 10");
+  if (value === "true")
+    throw new Error("LIBREREWARD_TRUST_PROXY=true is unsafe; use a hop count or explicit IP/CIDR");
+  const entries = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (!entries.length)
+    throw new Error("LIBREREWARD_TRUST_PROXY must be false, 1-10, or IP/CIDR entries");
+  for (const entry of entries) {
+    try {
+      if (entry.includes("/")) ipaddr.parseCIDR(entry);
+      else ipaddr.parse(entry);
+    } catch {
+      throw new Error(`invalid trusted proxy IP/CIDR: ${entry}`);
+    }
+  }
+  return entries;
 }
 
 function amountMap(input: string, supported: ReadonlySet<string>): ReadonlyMap<string, Money> {

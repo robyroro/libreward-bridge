@@ -109,6 +109,7 @@ try {
     external_reference: externalReference,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   });
+  if (!reward.claim_url) throw new Error("claim capability was already retained away");
   const claimToken = new URL(reward.claim_url).pathname.split("/").at(-1);
   if (!claimToken) throw new Error("claim token was not generated");
   await rewards.startClaim(claimToken);
@@ -180,6 +181,7 @@ try {
     external_reference: raceReference,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   });
+  if (!raceReward.claim_url) throw new Error("race claim capability was already retained away");
   const raceToken = new URL(raceReward.claim_url).pathname.split("/").at(-1);
   if (!raceToken) throw new Error("race claim token was not generated");
   await rewards.startClaim(raceToken);
@@ -276,6 +278,7 @@ try {
     external_reference: expiryReference,
     expires_at: expiresAt.toISOString(),
   });
+  if (!expiryReward.claim_url) throw new Error("expiry claim capability was already retained away");
   const expiryToken = new URL(expiryReward.claim_url).pathname.split("/").at(-1);
   if (!expiryToken) throw new Error("expiry claim token was not generated");
   await rewards.startClaim(expiryToken);

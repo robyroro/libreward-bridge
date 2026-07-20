@@ -11,6 +11,7 @@ import { publicId, randomSecret, uuid } from "../domain/ids.js";
 import { signWebhook } from "../domain/webhook-signing.js";
 import { AppError, notFound } from "../errors.js";
 import { webhookFailures } from "../metrics.js";
+import { projectVersion } from "../version.js";
 import type { Tenant } from "./reward-service.js";
 
 type Delivery = {
@@ -35,7 +36,7 @@ export class WebhookService {
 
   async createEndpoint(tenant: Tenant, input: { url: string; description?: string | undefined }) {
     await this.validateDestination(input.url);
-    const id = uuid();
+    const databaseId = uuid();
     const secret = `lwhsec_${randomSecret()}`;
     const row = await this.pool.query<{
       public_id: string;
@@ -47,7 +48,7 @@ export class WebhookService {
       `INSERT INTO webhook_endpoints(id,public_id,tenant_id,url,secret_ciphertext,description)
        VALUES($1,$2,$3,$4,$5,$6) RETURNING public_id,url,description,enabled,created_at`,
       [
-        id,
+        databaseId,
         publicId("wh"),
         tenant.id,
         input.url,
@@ -55,7 +56,10 @@ export class WebhookService {
         input.description ?? "",
       ],
     );
-    return { ...row.rows[0], secret };
+    const endpoint = row.rows[0];
+    if (!endpoint) throw new Error("webhook endpoint insert returned no row");
+    const { public_id: endpointId, ...fields } = endpoint;
+    return { id: endpointId, ...fields, secret };
   }
 
   async listEndpoints(tenant: Tenant) {
@@ -100,6 +104,17 @@ export class WebhookService {
       [tenant.id, endpointId],
     );
     if (result.rowCount !== 1) throw notFound();
+  }
+
+  async rotateSecret(tenant: Tenant, endpointId: string): Promise<{ secret: string }> {
+    const secret = `lwhsec_${randomSecret()}`;
+    const result = await this.pool.query(
+      `UPDATE webhook_endpoints SET secret_ciphertext=$1,updated_at=now()
+       WHERE tenant_id=$2 AND public_id=$3`,
+      [encrypt(this.config.encryptionKey, secret), tenant.id, endpointId],
+    );
+    if (result.rowCount !== 1) throw notFound();
+    return { secret };
   }
 
   async queueTest(tenant: Tenant, endpointId: string): Promise<{ event_id: string }> {
@@ -200,7 +215,7 @@ export class WebhookService {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "user-agent": "LibreReward-Bridge/0.1",
+          "user-agent": `LibreReward-Bridge/${projectVersion}`,
           "x-libreward-event-id": delivery.public_event_id,
           "x-libreward-timestamp": timestamp,
           "x-libreward-signature": signature,
@@ -233,8 +248,8 @@ export class WebhookService {
       const attempts = delivery.attempt_count + 1;
       const final = attempts >= this.config.WEBHOOK_MAX_ATTEMPTS;
       await this.pool.query(
-        `UPDATE webhook_deliveries SET status=$1,attempt_count=$2,last_error_code=$3,
-         next_attempt_at=now()+make_interval(secs => LEAST(86400,power(2,$2)::int)),updated_at=now() WHERE id=$4`,
+        `UPDATE webhook_deliveries SET status=$1,attempt_count=$2::int,last_error_code=$3,
+         next_attempt_at=now()+make_interval(secs => LEAST(86400,power(2,$2::int)::int)),updated_at=now() WHERE id=$4`,
         [
           final ? "failed" : "retry",
           attempts,

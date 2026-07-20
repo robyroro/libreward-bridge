@@ -1,5 +1,5 @@
 import { loadConfig } from "./config.js";
-import { createPool, migrate } from "./db.js";
+import { createPool, migrate, transaction } from "./db.js";
 import { keyedHash } from "./domain/crypto.js";
 import { publicId, randomSecret, uuid } from "./domain/ids.js";
 import { providerFor } from "./runtime.js";
@@ -24,13 +24,12 @@ try {
       const tenantPublicId = publicId("tn");
       const prefix = publicId("lrk");
       const rawKey = `${prefix}.${randomSecret()}`;
-      await pool.query("BEGIN");
-      try {
-        await pool.query(
+      await transaction(pool, async (client) => {
+        await client.query(
           "INSERT INTO tenants(id,public_id,display_name,status) VALUES($1,$2,$3,'active')",
           [tenantId, tenantPublicId, name],
         );
-        await pool.query(
+        await client.query(
           "INSERT INTO api_keys(id,tenant_id,key_prefix,secret_hash,scopes) VALUES($1,$2,$3,$4,$5)",
           [
             uuid(),
@@ -40,11 +39,7 @@ try {
             ["rewards:read", "rewards:write", "webhooks:read", "webhooks:write"],
           ],
         );
-        await pool.query("COMMIT");
-      } catch (error) {
-        await pool.query("ROLLBACK");
-        throw error;
-      }
+      });
       process.stdout.write(`Tenant: ${tenantPublicId}\nAPI key (shown once): ${rawKey}\n`);
       break;
     }
@@ -89,14 +84,13 @@ try {
       const operatorId = uuid();
       const operatorPublicId = publicId("op");
       const { prefix, rawKey } = operatorKey();
-      await pool.query("BEGIN");
-      try {
-        await pool.query(
+      await transaction(pool, async (client) => {
+        await client.query(
           `INSERT INTO operator_accounts(id,public_id,display_name,role,status)
            VALUES($1,$2,$3,$4,'active')`,
           [operatorId, operatorPublicId, name, role],
         );
-        await pool.query(
+        await client.query(
           `INSERT INTO operator_api_keys(id,operator_id,key_prefix,secret_hash,scopes)
            VALUES($1,$2,$3,$4,$5)`,
           [
@@ -107,11 +101,7 @@ try {
             scopesForRole(role),
           ],
         );
-        await pool.query("COMMIT");
-      } catch (error) {
-        await pool.query("ROLLBACK");
-        throw error;
-      }
+      });
       process.stdout.write(`Operator: ${operatorPublicId}\nAPI key (shown once): ${rawKey}\n`);
       break;
     }

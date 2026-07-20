@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../.."
+  },
+  "include": [
+    "server.ts",
+    "../../sdk/typescript/client.ts",
+    "../../src/domain/webhook-signing.ts",
+    "../../src/version.ts"
+  ]
+}

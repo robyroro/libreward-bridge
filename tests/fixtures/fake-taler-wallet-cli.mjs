@@ -1,7 +1,7 @@
 const args = process.argv.slice(2);
 
 if (args.includes("--version")) {
-  process.stdout.write("test-wallet 1.0.0\n");
+  process.stdout.write("test-wallet 1.6.12\n");
   process.exit(0);
 }
 
@@ -13,11 +13,13 @@ if (args.includes("run-until-done")) {
 const apiIndex = args.indexOf("api");
 const operation = apiIndex >= 0 ? args[apiIndex + 1] : undefined;
 const walletDb = args.find((arg) => arg.startsWith("--wallet-db=")) ?? "";
+const walletConnection = args.find((arg) => arg.startsWith("--wallet-connection=")) ?? "";
+const walletTarget = `${walletDb}${walletConnection}`;
 const response = (result) => ({ type: "response", operation, id: "fixture", result });
 
-if (operation === "initiatePeerPushDebit" && walletDb.includes("timeout-wallet")) {
+if (operation === "initiatePeerPushDebit" && walletTarget.includes("timeout-wallet")) {
   setTimeout(() => undefined, 5_000);
-} else if (operation === "initiatePeerPushDebit" && walletDb.includes("error-wallet")) {
+} else if (operation === "initiatePeerPushDebit" && walletTarget.includes("error-wallet")) {
   process.stdout.write(
     JSON.stringify({
       type: "error",
@@ -26,10 +28,26 @@ if (operation === "initiatePeerPushDebit" && walletDb.includes("timeout-wallet")
       error: { code: 7012, hint: "insufficient balance" },
     }),
   );
+} else if (
+  operation === "initiatePeerPushDebit" &&
+  walletTarget.includes("malformed-init-wallet")
+) {
+  process.stdout.write(JSON.stringify(response({})));
 } else
   switch (operation) {
     case "getVersion":
-      process.stdout.write(JSON.stringify(response({ implementationSemver: "1.0.0" })));
+      process.stdout.write(
+        walletTarget.includes("malformed-wallet")
+          ? JSON.stringify(response({ implementationSemver: 12 }))
+          : JSON.stringify(
+              response({
+                implementationSemver: walletTarget.includes("unsupported-wallet")
+                  ? "1.5.0"
+                  : "1.6.12",
+                version: "7:0:0",
+              }),
+            ),
+      );
       break;
     case "getBalances":
       process.stdout.write(
@@ -55,6 +73,11 @@ if (operation === "initiatePeerPushDebit" && walletDb.includes("timeout-wallet")
       );
       break;
     case "testingWaitTransactionState":
+      if (walletConnection) {
+        process.stderr.write("testing API must not be used with the persistent RPC mode\n");
+        process.exitCode = 8;
+        break;
+      }
       process.stdout.write(
         JSON.stringify(response({ transactionId: "txn:peer-push-debit:fixture" })),
       );
@@ -65,10 +88,12 @@ if (operation === "initiatePeerPushDebit" && walletDb.includes("timeout-wallet")
           response({
             transactionId: "txn:peer-push-debit:fixture",
             type: "peer-push-debit",
-            txState: walletDb.includes("expired-wallet")
+            txState: walletTarget.includes("expired-wallet")
               ? { major: "expired" }
-              : { major: "pending", minor: "ready" },
-            ...(walletDb.includes("expired-wallet")
+              : walletTarget.includes("pending-wallet")
+                ? { major: "pending", minor: "deposit" }
+                : { major: "pending", minor: "ready" },
+            ...(walletTarget.includes("expired-wallet") || walletTarget.includes("pending-wallet")
               ? {}
               : { talerUri: "taler://pay-push/exchange.example/fixture" }),
             amountRaw: "KUDOS:1",

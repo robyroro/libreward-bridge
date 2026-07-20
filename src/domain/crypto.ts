@@ -47,10 +47,23 @@ export function decrypt(key: Buffer, envelope: string): string {
   const [version, nonceEncoded, tagEncoded, ciphertextEncoded] = envelope.split(".");
   if (version !== "v1" || !nonceEncoded || !tagEncoded || !ciphertextEncoded)
     throw new Error("invalid encrypted envelope");
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(nonceEncoded, "base64url"));
-  decipher.setAuthTag(Buffer.from(tagEncoded, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(ciphertextEncoded, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
+  try {
+    const nonce = decodeCanonicalBase64Url(nonceEncoded);
+    const tag = decodeCanonicalBase64Url(tagEncoded);
+    const ciphertext = decodeCanonicalBase64Url(ciphertextEncoded);
+    if (key.length !== 32 || nonce.length !== 12 || tag.length !== 16 || ciphertext.length === 0)
+      throw new Error("invalid encrypted envelope");
+    const decipher = createDecipheriv("aes-256-gcm", key, nonce);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+  } catch {
+    throw new Error("invalid encrypted envelope");
+  }
+}
+
+function decodeCanonicalBase64Url(value: string): Buffer {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("invalid base64url");
+  const decoded = Buffer.from(value, "base64url");
+  if (decoded.toString("base64url") !== value) throw new Error("non-canonical base64url");
+  return decoded;
 }
