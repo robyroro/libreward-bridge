@@ -11,6 +11,14 @@
   "bugs": {
     "url": "https://github.com/robyroro/libreward-bridge/issues"
   },
+  "files": [
+    "dist/",
+    "migrations/",
+    "README.md",
+    "LICENSE",
+    "COPYRIGHT.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
