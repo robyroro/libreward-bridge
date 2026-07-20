@@ -1,0 +1,13 @@
+name: GNU Taler interoperability issue
+description: Report a sanitized valueless compatibility result.
+title: "[interop] "
+labels: [interoperability]
+body:
+  - type: input
+    id: versions
+    attributes: { label: Exact wallet/API/exchange versions }
+    validations: { required: true }
+  - type: textarea
+    id: result
+    attributes: { label: Sanitized steps and result }
+    validations: { required: true }

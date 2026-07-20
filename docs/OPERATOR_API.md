@@ -18,7 +18,7 @@ npm run cli -- operator:key-rotate --operator op_...
 npm run cli -- operator:key-revoke --prefix lro_...
 ```
 
-Set `OPERATOR_API_KEY_HASH_SECRET` independently from `API_KEY_HASH_SECRET`. Rotate by creating a replacement, changing the client, verifying use through `last_used_at`, and revoking the old prefix. Never put operator keys in browser storage or the Recompensated application.
+Set `OPERATOR_API_KEY_HASH_SECRET` independently from `API_KEY_HASH_SECRET`. Rotate by creating a replacement, changing the client, verifying use through `last_used_at`, and revoking the old prefix. Never put operator keys in browser storage or a tenant application.
 
 ## Endpoints
 

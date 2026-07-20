@@ -1,19 +1,21 @@
 # Architecture
 
-## Components and boundary
+The API validates callers and public claims; PostgreSQL is the coordination and state boundary; the worker alone performs provider, liquidity, retention, and webhook effects. wallet-core is a separate high-trust process reached through a persistent local RPC connection. Recipient wallets, webhook receivers, and exchanges are external.
 
-`api` separately authenticates tenants and role-scoped operators, validates JSON, creates rewards, serves claims, manages webhooks, queues wallet checks, and records operator audits. `worker` performs provider operations under a PostgreSQL advisory lock, reconciles wallet transactions, checks liquidity, expires claims, applies retention, and delivers webhooks. Both share PostgreSQL. `taler-wallet-cli` and its wallet database are an external high-trust dependency. Recipient wallets and exchanges are outside the deployment.
+## System context
 
 ```mermaid
 flowchart LR
-  I["Integrator platform"] -->|"scoped API key"| A["LibreReward API"]
-  O["Restricted operator"] -->|"role-scoped operator key"| A
-  R["Recipient wallet/browser"] -->|"bearer claim URL"| A
+  I["Integrator"] -->|"tenant API key"| A["LibreReward API"]
+  O["Operator"] -->|"separate RBAC key"| A
+  R["Recipient browser"] -->|"bearer claim link"| A
   A --> P[("PostgreSQL")]
-  W["LibreReward worker"] --> P
-  W -->|"wallet-core API via CLI"| T["Operator Taler wallet"]
-  T --> E["GNU Taler exchange"]
-  W -->|"signed webhook"| I
+  W["Worker"] --> P
+  W -->|"serialized RPC"| T["GNU Taler wallet-core"]
+  T --> E["Exchange"]
+  R --> RW["Recipient wallet"]
+  RW --> E
+  W -->|"signed final event"| I
 ```
 
 ## Reward lifecycle
@@ -22,7 +24,6 @@ flowchart LR
 stateDiagram-v2
   [*] --> created
   created --> claimable
-  created --> cancelled
   claimable --> claim_in_progress
   claimable --> expired
   claimable --> cancelled
@@ -36,32 +37,83 @@ stateDiagram-v2
   reconciliation_required --> cancelled
 ```
 
-All transitions are centrally validated, performed under a row lock/optimistic version check, and append an event. Final events enqueue webhook deliveries in the same transaction.
-
-## Data model
+## Claim sequence
 
 ```mermaid
-erDiagram
-  TENANTS ||--o{ API_KEYS : owns
-  TENANTS ||--o{ REWARDS : creates
-  REWARDS ||--|| CLAIM_TOKENS : has
-  REWARDS ||--o| PROVIDER_OPERATIONS : funds
-  REWARDS ||--o{ REWARD_EVENTS : records
-  TENANTS ||--o{ WEBHOOK_ENDPOINTS : configures
-  REWARD_EVENTS ||--o{ WEBHOOK_DELIVERIES : queues
-  WEBHOOK_ENDPOINTS ||--o{ WEBHOOK_DELIVERIES : receives
-  OPERATOR_ACCOUNTS ||--o{ OPERATOR_API_KEYS : owns
-  OPERATOR_ACCOUNTS ||--o{ OPERATOR_AUDIT_EVENTS : performs
+sequenceDiagram
+  participant I as Integrator
+  participant A as API
+  participant D as PostgreSQL
+  participant R as Recipient
+  participant W as Worker
+  participant T as wallet-core
+  I->>A: Create reward plus idempotency key
+  A->>D: Reward, token hash, event
+  A-->>I: Reward ID and bearer claim URL
+  R->>A: Start claim
+  A->>D: Lock and create one provider operation
+  W->>D: Claim pending work
+  W->>T: initiatePeerPushDebit
+  T-->>W: Transaction ID
+  W->>T: getTransactionById until shareable
+  W->>D: Encrypt Taler URI and persist known ID
+  R->>A: Poll status
+  A-->>R: Bearer Taler URI / QR
+  R->>T: Import in recipient wallet
+  W->>T: Reconcile transaction
+  W->>D: Final state and webhook delivery
+  W-->>I: Signed final webhook
 ```
 
-Money uses a signed-safe PostgreSQL `bigint` whole value and an integer fraction in units of 1e-8. The API canonical form is `CURRENCY:value.fraction`. Claim tokens and API keys are not stored plaintext. Provider claim URIs and webhook secrets use AES-256-GCM envelopes under a deployment key.
+## Trust boundaries
 
-## Idempotency and concurrency
+```mermaid
+flowchart TB
+  subgraph Public["Public recipient boundary"]
+    B["Browser"]
+    RW["Recipient wallet"]
+  end
+  subgraph Tenant["Tenant boundary"]
+    I["Integrator"]
+    H["Webhook endpoint"]
+  end
+  subgraph Operations["Restricted operator boundary"]
+    O["Operator"]
+    A["API"]
+    D[("PostgreSQL")]
+    W["Worker"]
+  end
+  subgraph WalletHost["Wallet host boundary"]
+    T["wallet-core RPC"]
+    WD[("Wallet database")]
+  end
+  X["GNU Taler exchange"]
+  B --> A
+  RW --> X
+  I --> A
+  O --> A
+  A --> D
+  W --> D
+  W --> T
+  T --> WD
+  T --> X
+  W --> H
+```
 
-Reward creation has a unique `(tenant_id,idempotency_key)` constraint and canonical request fingerprint. Identical replays reconstruct the same pseudorandom claim token from stored random material plus a server PRF key; different payloads return `idempotency_conflict`. Claims lock the reward/token and create one unique `(reward_id,operation_type)` row. Workers claim work with `FOR UPDATE SKIP LOCKED`.
+## Unknown outcome
 
-This is effectively-once, not mathematical exactly-once across wallet-core. Known external IDs are reconciled; an unknown timeout is quarantined for manual investigation.
+```mermaid
+flowchart TD
+  S["Initiate wallet operation"] --> Q{"Transaction ID received?"}
+  Q -->|"yes"| K["Persist ID and reconcile by ID"]
+  Q -->|"no; timeout/error after possible effect"| U["Mark reconciliation_required"]
+  U --> N["Never initiate automatically again"]
+  N --> M["Stop worker; inspect wallet using amount, summary, time, expiry"]
+  M --> D{"Operator can prove no operation exists?"}
+  D -->|"no"| U
+  D -->|"yes, documented approval"| C["Separate compensating decision"]
+```
 
-## Deployment topology
+Creation uses a tenant-scoped idempotency key and canonical request fingerprint. Claim start locks the reward and token, consumes the capability, and creates one uniquely constrained provider operation. Workers use `FOR UPDATE SKIP LOCKED`; all wallet-affecting calls share a PostgreSQL advisory lock. This is effectively-once coordination, not a proof of mathematical exactly-once behavior across wallet-core.
 
-Run at least one API and one worker against PostgreSQL. Multiple API instances and workers are supported; every Bridge wallet call uses a shared PostgreSQL advisory lock, and API-triggered checks are queued for workers. Direct wallet CLI maintenance is outside that lock, so stop workers first. An external hardened wallet service remains preferable if GNU Taler provides a supported operator boundary.
+Money is stored as whole `bigint` plus an eight-digit fraction. API and claim credentials are hashed. Provider URIs and webhook secrets use versioned AES-256-GCM envelopes. See [Threat model](THREAT_MODEL.md), [Data lifecycle](DATA_LIFECYCLE.md), and [Taler compatibility](TALER_COMPATIBILITY.md).

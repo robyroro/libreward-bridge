@@ -45,13 +45,14 @@ export async function one<T extends QueryResultRow>(
 
 export async function migrate(pool: pg.Pool): Promise<void> {
   const directory = join(process.cwd(), "migrations");
-  await pool.query("SELECT pg_advisory_lock($1)", [837_650_021]);
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query("SELECT pg_advisory_lock($1)", [837_650_021]);
+    await client.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
     const applied = new Set(
-      (await pool.query<{ version: string }>("SELECT version FROM schema_migrations")).rows.map(
+      (await client.query<{ version: string }>("SELECT version FROM schema_migrations")).rows.map(
         (row) => row.version,
       ),
     );
@@ -60,9 +61,22 @@ export async function migrate(pool: pg.Pool): Promise<void> {
       .sort()) {
       const version = filename.replace(/\.sql$/, "");
       if (!applied.has(version))
-        await pool.query(await readFile(join(directory, filename), "utf8"));
+        await client.query(await readFile(join(directory, filename), "utf8"));
     }
+  } catch (error) {
+    // Migration files own their transaction. Clear an aborted transaction before releasing the
+    // session advisory lock so a failed migration cannot poison a pooled connection.
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original migration failure; releasing discards a broken connection.
+    }
+    throw error;
   } finally {
-    await pool.query("SELECT pg_advisory_unlock($1)", [837_650_021]);
+    try {
+      await client.query("SELECT pg_advisory_unlock($1)", [837_650_021]);
+    } finally {
+      client.release();
+    }
   }
 }

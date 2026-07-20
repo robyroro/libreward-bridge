@@ -63,6 +63,12 @@ export class RewardService {
       : new Date(Date.now() + this.config.CLAIM_TOKEN_TTL_SECONDS * 1000);
     if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date())
       throw new AppError(422, "invalid_expiration", "expires_at must be in the future");
+    if (expiresAt.getTime() > Date.now() + this.config.CLAIM_TOKEN_TTL_SECONDS * 1000)
+      throw new AppError(
+        422,
+        "invalid_expiration",
+        "expires_at exceeds the configured maximum claim lifetime",
+      );
     const normalized = {
       amount: serializeAmount(money),
       description: input.description.trim(),
@@ -104,8 +110,8 @@ export class RewardService {
       );
       const row = inserted.rows[0];
       if (!row) {
-        const existing = await client.query<RewardRow & { token_material: string }>(
-          `SELECT r.*,ct.token_material FROM rewards r JOIN claim_tokens ct ON ct.reward_id=r.id
+        const existing = await client.query<RewardRow & { token_material: string | null }>(
+          `SELECT r.*,ct.token_material FROM rewards r LEFT JOIN claim_tokens ct ON ct.reward_id=r.id
            WHERE r.tenant_id=$1 AND r.idempotency_key=$2`,
           [tenant.id, idempotencyKey],
         );
@@ -121,7 +127,7 @@ export class RewardService {
         }
         return {
           row: duplicate,
-          token: this.tokenFromMaterial(duplicate.token_material),
+          token: duplicate.token_material ? this.tokenFromMaterial(duplicate.token_material) : null,
           idempotent: true,
         };
       }
@@ -180,9 +186,11 @@ export class RewardService {
       const row = found.rows[0];
       if (!row || row.revoked_at) throw notFound();
       if (row.expires_at <= new Date()) {
-        if (row.status === "claimable")
-          await this.transition(client, row, "expired", "reward.expired", {});
-        throw new AppError(410, "reward_expired", "Reward has expired");
+        const expired =
+          row.status === "claimable"
+            ? await this.transition(client, row, "expired", "reward.expired", {})
+            : row;
+        return { reward: expired, operationId: null, duplicate: false, expired: true } as const;
       }
       if (row.status === "cancelled")
         throw new AppError(409, "reward_cancelled", "Reward was cancelled");
@@ -193,7 +201,12 @@ export class RewardService {
         [row.id],
       );
       if (existing.rows[0])
-        return { reward: row, operationId: existing.rows[0].id, duplicate: true };
+        return {
+          reward: row,
+          operationId: existing.rows[0].id,
+          duplicate: true,
+          expired: false,
+        } as const;
       if (row.status !== "claimable")
         throw new AppError(
           409,
@@ -227,8 +240,9 @@ export class RewardService {
           row.currency,
         ],
       );
-      return { reward: updated, operationId, duplicate: false };
+      return { reward: updated, operationId, duplicate: false, expired: false } as const;
     });
+    if (result.expired) throw new AppError(410, "reward_expired", "Reward has expired");
     if (!result.duplicate) claimsStarted.inc();
     return {
       reward: this.publicReward(result.reward),
@@ -314,26 +328,27 @@ export class RewardService {
       )
     ).rows[0];
     if (!reward) throw notFound();
+    const decodedCursor = cursor ? decodeEventCursor(cursor) : null;
     const rows = await this.pool.query<{
+      id: string;
       event_id: string;
       event_type: string;
       data: Record<string, unknown>;
       created_at: Date;
     }>(
-      `SELECT event_id,event_type,data,created_at FROM reward_events WHERE reward_id=$1
-       AND ($2::timestamptz IS NULL OR created_at < $2) ORDER BY created_at DESC,id DESC LIMIT $3`,
-      [
-        reward.id,
-        cursor ? new Date(Buffer.from(cursor, "base64url").toString("utf8")) : null,
-        limit,
-      ],
+      `SELECT id,event_id,event_type,data,created_at FROM reward_events WHERE reward_id=$1
+       AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3::uuid))
+       ORDER BY created_at DESC,id DESC LIMIT $4`,
+      [reward.id, decodedCursor?.createdAt ?? null, decodedCursor?.id ?? null, limit],
     );
     const last = rows.rows.at(-1);
     return {
-      data: rows.rows,
+      data: rows.rows.map(({ id: _id, ...event }) => event),
       next_cursor:
         last && rows.rows.length === limit
-          ? Buffer.from(last.created_at.toISOString()).toString("base64url")
+          ? Buffer.from(JSON.stringify([last.created_at.toISOString(), last.id])).toString(
+              "base64url",
+            )
           : null,
     };
   }
@@ -379,10 +394,10 @@ export class RewardService {
     };
   }
 
-  private creationResponse(row: RewardRow, token: string, idempotent: boolean) {
+  private creationResponse(row: RewardRow, token: string | null, idempotent: boolean) {
     return {
       ...this.publicReward(row),
-      claim_url: `${this.config.LIBREREWARD_PUBLIC_URL}/claim/${token}`,
+      claim_url: token ? `${this.config.LIBREREWARD_PUBLIC_URL}/claim/${token}` : null,
       idempotent,
     };
   }
@@ -434,5 +449,24 @@ export class RewardService {
         );
       }
     }
+  }
+}
+
+function decodeEventCursor(cursor: string): { createdAt: Date; id: string } {
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    if (
+      !Array.isArray(decoded) ||
+      decoded.length !== 2 ||
+      typeof decoded[0] !== "string" ||
+      typeof decoded[1] !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(decoded[1])
+    )
+      throw new Error("invalid cursor");
+    const createdAt = new Date(decoded[0]);
+    if (!Number.isFinite(createdAt.getTime())) throw new Error("invalid cursor date");
+    return { createdAt, id: decoded[1] };
+  } catch {
+    throw new AppError(422, "invalid_cursor", "Event cursor is invalid");
   }
 }

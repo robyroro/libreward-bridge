@@ -9,6 +9,7 @@ import { WebhookService } from "./services/webhook-service.js";
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
 const provider = providerFor(config);
+await provider.verifyConfiguration();
 const operations = new OperationWorker(pool, config, provider);
 const webhooks = new WebhookService(pool, config);
 const liquidity = new LiquidityService(pool, config, provider);

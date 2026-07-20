@@ -19,6 +19,8 @@ export type OperatorPrincipal = Readonly<{
   role: "viewer" | "operator" | "admin";
 }>;
 
+const dummySecretHash = "0".repeat(64);
+
 export function authenticate(pool: pg.Pool, config: Config, requiredScope: string) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const authorization = request.headers.authorization ?? "";
@@ -40,9 +42,10 @@ export function authenticate(pool: pg.Pool, config: Config, requiredScope: strin
     );
     const row = result.rows[0];
     const candidate = keyedHash(config.API_KEY_HASH_SECRET, match[1]);
+    const hashMatches = safeEqualHex(row?.secret_hash ?? dummySecretHash, candidate);
     if (
       !row ||
-      !safeEqualHex(row.secret_hash, candidate) ||
+      !hashMatches ||
       row.revoked_at ||
       (row.expires_at && row.expires_at <= new Date()) ||
       row.status !== "active"
@@ -53,10 +56,12 @@ export function authenticate(pool: pg.Pool, config: Config, requiredScope: strin
       throw new AppError(403, "forbidden", "API key lacks required scope");
     request.tenant = { id: row.tenant_id, publicId: row.public_id };
     request.scopes = new Set(row.scopes);
-    void pool.query(
-      "UPDATE api_keys SET last_used_at=now() WHERE key_prefix=$1 AND (last_used_at IS NULL OR last_used_at<now()-interval '5 minutes')",
-      [prefix],
-    );
+    void pool
+      .query(
+        "UPDATE api_keys SET last_used_at=now() WHERE key_prefix=$1 AND (last_used_at IS NULL OR last_used_at<now()-interval '5 minutes')",
+        [prefix],
+      )
+      .catch(() => undefined);
   };
 }
 
@@ -89,9 +94,10 @@ export function authenticateOperator(pool: pg.Pool, config: Config, requiredScop
     );
     const row = result.rows[0];
     const candidate = keyedHash(config.OPERATOR_API_KEY_HASH_SECRET, match[1]);
+    const hashMatches = safeEqualHex(row?.secret_hash ?? dummySecretHash, candidate);
     if (
       !row ||
-      !safeEqualHex(row.secret_hash, candidate) ||
+      !hashMatches ||
       row.revoked_at ||
       (row.expires_at && row.expires_at <= new Date()) ||
       row.status !== "active"
@@ -104,11 +110,13 @@ export function authenticateOperator(pool: pg.Pool, config: Config, requiredScop
       throw new AppError(403, "forbidden", "Operator key lacks required scope");
     request.operator = { id: row.operator_id, publicId: row.public_id, role: row.role };
     request.scopes = new Set(row.scopes);
-    void pool.query(
-      `UPDATE operator_api_keys SET last_used_at=now() WHERE key_prefix=$1
-       AND (last_used_at IS NULL OR last_used_at<now()-interval '5 minutes')`,
-      [prefix],
-    );
+    void pool
+      .query(
+        `UPDATE operator_api_keys SET last_used_at=now() WHERE key_prefix=$1
+         AND (last_used_at IS NULL OR last_used_at<now()-interval '5 minutes')`,
+        [prefix],
+      )
+      .catch(() => undefined);
   };
 }
 

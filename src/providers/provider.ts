@@ -50,6 +50,7 @@ export class ProviderError extends Error {
     public readonly classification: "transient" | "permanent" | "ambiguous",
     public readonly code: string,
     message: string,
+    public readonly externalOperationId?: string,
   ) {
     super(message);
   }

@@ -13,6 +13,7 @@ describe("GNU Taler wallet CLI provider", () => {
       TALER_WALLET_CRYPTO_WORKER: "sync",
       TALER_WALLET_COMMAND_TIMEOUT_MS: 1_000,
       TALER_WALLET_DB: "fixture-wallet.sqlite3",
+      TALER_WALLET_CONNECTION: "fixture-wallet.sock",
       TALER_EXCHANGE_BASE_URL: "https://exchange.example/",
     });
 
@@ -74,6 +75,40 @@ describe("GNU Taler wallet CLI provider", () => {
       errorCode: "wallet_expired",
     });
   });
+
+  it("rejects unverified and malformed wallet versions", async () => {
+    await expect(
+      stableFixtureProvider("unsupported-wallet.sock").verifyConfiguration(),
+    ).rejects.toMatchObject({
+      classification: "permanent",
+      code: "wallet_version_unsupported",
+    } satisfies Partial<ProviderError>);
+    await expect(
+      stableFixtureProvider("malformed-wallet.sock").verifyConfiguration(),
+    ).rejects.toMatchObject({
+      classification: "permanent",
+      code: "wallet_cli_malformed_response",
+    } satisfies Partial<ProviderError>);
+  });
+
+  it("uses stable polling and retains a known transaction ID after initiation", async () => {
+    await expect(
+      stableFixtureProvider("pending-wallet.sock", 600).createRewardOperation(operation()),
+    ).rejects.toMatchObject({
+      classification: "ambiguous",
+      code: "wallet_readiness_timeout",
+      externalOperationId: "txn:peer-push-debit:fixture",
+    } satisfies Partial<ProviderError>);
+  });
+
+  it("quarantines a malformed initiation response without retrying", async () => {
+    await expect(
+      stableFixtureProvider("malformed-init-wallet.sock").createRewardOperation(operation()),
+    ).rejects.toMatchObject({
+      classification: "ambiguous",
+      code: "wallet_cli_initiate_unknown",
+    } satisfies Partial<ProviderError>);
+  });
 });
 
 function fixtureProvider(walletDb: string, timeoutMs = 1_000) {
@@ -83,6 +118,19 @@ function fixtureProvider(walletDb: string, timeoutMs = 1_000) {
     TALER_WALLET_CRYPTO_WORKER: "sync",
     TALER_WALLET_COMMAND_TIMEOUT_MS: timeoutMs,
     TALER_WALLET_DB: walletDb,
+    TALER_WALLET_ALLOW_TESTING_API: true,
+    TALER_EXCHANGE_BASE_URL: "https://exchange.example/",
+  });
+}
+
+function stableFixtureProvider(walletConnection: string, timeoutMs = 1_000) {
+  return new TalerWalletCliProvider({
+    TALER_WALLET_CLI: "unused-when-node-script-is-set",
+    TALER_WALLET_CLI_NODE_SCRIPT: fixture,
+    TALER_WALLET_CRYPTO_WORKER: "sync",
+    TALER_WALLET_COMMAND_TIMEOUT_MS: timeoutMs,
+    TALER_WALLET_DB: "unused.sqlite3",
+    TALER_WALLET_CONNECTION: walletConnection,
     TALER_EXCHANGE_BASE_URL: "https://exchange.example/",
   });
 }

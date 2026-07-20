@@ -1,0 +1,137 @@
+CALL: NGI TALER
+
+SUPERSEDED WORKING DRAFT — DO NOT SUBMIT. The current application draft is grant/APPLICATION_DRAFT.md. This text is retained as genuine revision provenance.
+
+CONTACT INFORMATION
+
+Name: robyroro (public alias; legal name can be supplied privately if selected)
+Email: <CONFIRM REACHABLE CONTACT EMAIL IN THE WEB FORM>
+Phone: <CONFIRM OR LEAVE BLANK IF OPTIONAL>
+Organisation: Individual applicant
+Country: <CONFIRM COUNTRY>
+
+GENERAL PROJECT INFORMATION
+
+Proposal name: LibreReward: privacy-preserving GNU Taler rewards for FOSS services
+
+Website / wiki:
+https://github.com/robyroro/libreward-bridge
+
+ABSTRACT
+
+LibreReward Bridge is AGPL-licensed middleware that lets a free/open-source service issue an exact-value, single-use GNU Taler reward without creating a recipient account or collecting the recipient's name, email, advertising identifier or browser fingerprint. An integrator creates a reward through an idempotent API, gives the recipient a short-lived bearer claim link, and receives signed lifecycle webhooks. An operator-controlled Taler wallet funds the peer-push claim.
+
+A public 0.1 sandbox prototype already demonstrates the concept and is prior, unfunded work. The proposed project will not charge NLnet for that baseline. The new R&D will: (1) design and upstream a caller-idempotent, supported server-side peer-push operation; (2) replace the current testing-only wallet boundary with a capability-negotiated and documented operator interface; (3) publish a reusable integration kit and an AGPL Formbricks Community reference adapter for rewarding completed surveys without sharing response content or respondent identity with LibreReward; (4) deliver internationalised, WCAG 2.2 AA-tested claim flows, reproducible releases and operator documentation; and (5) complete an independent security review, remediation and a 1.0 release.
+
+The result will be a generic technology commons for privacy-preserving rewards, research participation payments, community incentives, bug bounties and other small disbursements. It is an outbound reward capability, not a merchant checkout, exchange, bank, recipient wallet or payment institution.
+
+The project has a clear European dimension independently of applicant location. It contributes directly to GNU Taler, a European-led open payment effort funded through Horizon Europe; targets self-hosted FOSS used by European research, civic and community organisations; and will demonstrate integration with Formbricks Community, whose maintainer organisation is based in Germany. The work advances European payment sovereignty and GDPR-aligned data minimisation by making a European libre payment stack easier to adopt without a proprietary payment processor or recipient-identity database. The applicant's country will also be stated accurately in the contact section.
+
+RELEVANT EXPERIENCE
+
+The applicant designed and implemented the public LibreReward 0.1 prototype: a TypeScript/Fastify service with PostgreSQL concurrency controls, exact fixed-point money, scoped tenant and operator credentials, hashed claims, encrypted provider capabilities, signed webhooks, liquidity gates, retention controls, an OpenAPI contract, a threat model and a guarded valueless Taler demo.
+
+The component was extracted from experience with a separate rewards application so the proposed project boundary is independently deployable and does not depend on a closed platform. Public evidence, tests, architecture decisions and limitations are in the project repository. The initial extraction used Claude Opus 4.8 as a disclosed development assistant. The applicant remains responsible for every design and implementation decision.
+
+REQUESTED SUPPORT
+
+Requested amount: EUR 46,800
+
+Working rate assumption: EUR 60/hour for 680 hours of applicant engineering, research, documentation and remediation (EUR 40,800), plus EUR 6,000 reserved for an independent security review. There are no facilities and administrative charges in this budget. The rate, availability and audit quotation must be confirmed before submission.
+
+Expected duration: eight months, beginning after the Memorandum of Understanding and targeting completion no later than July 2027, subject to confirmation of the programme's final delivery date.
+
+Task 1 - Upstream peer-push idempotency and operator protocol
+150 hours x EUR 60 = EUR 9,000
+
+- Publish a failure and threat model for server-originated peer-push debit, including process crash, unknown timeout, duplicate request, wallet restart, terms/KYC interruption, expiry and cancellation.
+- Agree a concrete client-reference/idempotency and transaction-readiness design with GNU Taler maintainers through a public channel.
+- Submit an upstream patch or independently reviewable reference implementation and automated wallet-core tests. Upstream merge is not a payment condition; publication, reviewability and test evidence are.
+- Document the authoritative state mapping and compatibility/fallback behavior.
+
+Task 2 - Hardened LibreReward provider boundary
+220 hours x EUR 60 = EUR 13,200
+
+- Implement the agreed interface with capability/version negotiation and remove reliance on undocumented behavior.
+- Provide a long-running or otherwise upstream-supported operator boundary where available, with authentication, serialization, bounded timeouts and safe restart.
+- Add reproducible tests for ambiguous initiation, known-ID reconciliation, two-recipient races, expiry, insufficient balance, exchange terms and KYC-required states.
+- Publish migration and operations guidance without claiming exactly-once behavior where the upstream protocol cannot provide it.
+
+Task 3 - FOSS integration and adoption kit
+150 hours x EUR 60 = EUR 9,000
+
+- Expand the TypeScript SDK and publish stable examples for reward creation, idempotency, claim delivery, webhook verification and reconciliation.
+- Build an AGPL reference adapter for Formbricks Community core using its responseFinished webhook/API boundary. It will pass only a random eligibility reference and configured reward amount to LibreReward; response content and respondent identity stay outside the bridge.
+- Consult the Formbricks and GNU Taler communities before finalising the adapter boundary, and keep the adapter independently deployable if upstream inclusion is not appropriate.
+- Run documented end-to-end demonstrations and collect structured feedback from at least three potential FOSS integrators or operators.
+
+Task 4 - Accessibility, localisation, packaging and documentation
+100 hours x EUR 60 = EUR 6,000
+
+- Add a localisation framework and at least two community-reviewed European-language translations in addition to English.
+- Test the recipient claim journey against WCAG 2.2 AA using automated checks and manual keyboard, focus, contrast, zoom, screen-reader and reduced-motion checks; publish results and remediate failures.
+- Publish administrator, integrator and recipient documentation, a data-flow inventory and secure deployment profiles.
+- Produce reproducible OCI images, a CycloneDX SBOM, dependency/license reports, signed release artifacts and a clean-install verification.
+
+Task 5 - Independent security review, remediation and 1.0 release
+60 hours x EUR 60 = EUR 3,600
+Independent review allowance = EUR 6,000
+Task total = EUR 9,600
+
+- Commission an independent review covering authentication and tenant isolation, concurrency/idempotency, claim capabilities, wallet ambiguity, webhook SSRF/signing, secrets, retention and container boundaries.
+- Publish the report or a disclosure-safe public summary with every finding tracked to a disposition.
+- Resolve all critical and high-severity findings and document accepted residual risks.
+- Publish LibreReward Bridge 1.0 and the final public project report.
+
+TOTAL: EUR 46,800
+
+OTHER FUNDING
+
+The 0.1 prototype predates this request and is treated as an in-kind/self-funded baseline. This draft assumes that the proposed future tasks have no other committed funding and that the applicant has received no prior NGI TALER grant, leaving the programme's EUR 60,000 cumulative cap unaffected. The applicant must confirm or correct both statements before submission. Any other past or present funding relevant to the project will be disclosed in the form.
+
+COMPARISON WITH EXISTING AND HISTORICAL EFFORTS
+
+GNU Taler's merchant stack and the funded Taler Fastify plugin focus on accepting customer payments or donations. LibreReward moves in the opposite direction: an operator issues a bounded, single-use reward to a recipient.
+
+The Taler Wallet ID Lookup Service supports identity-addressed P2P payments. LibreReward deliberately avoids a recipient directory or wallet address; possession of a short-lived claim capability is sufficient.
+
+Taler in Liberapay adds Taler to a specific recurring-donation platform. The Interledger interoperability inquiry studies protocol interoperability for web monetisation. LibreReward instead provides a deployable, platform-neutral reward lifecycle with creation idempotency, claim races, reconciliation, tenant isolation and signed result webhooks.
+
+The proposed Formbricks adapter is a concrete adoption example, not a dependency of the bridge. Unlike a conventional survey incentive system, the bridge does not need survey answers or respondent identity. The proposal must preserve this distinction and avoid duplicating inbound checkout work already funded by NGI TALER.
+
+SIGNIFICANT TECHNICAL CHALLENGES
+
+1. An external wallet operation can succeed while the caller observes a timeout. Without a caller reference or authoritative lookup, automatically repeating peer-push initiation can create duplicate liabilities. The project will solve this upstream where possible and fail safely where it cannot.
+2. Wallet-core is primarily a user-wallet component. A server operator needs an authenticated, serialized and supportable boundary with explicit version and state semantics.
+3. Bearer claim URLs and taler://pay-push URIs must remain usable while resisting leakage, replay, logging and cross-tenant access.
+4. Integrators need a simple lifecycle without weakening financial correctness. Database state, wallet state and webhook delivery must remain reconcilable across crashes and retries.
+5. Real deployments encounter exchange terms, KYC thresholds, liquidity and accounting policies. The software must expose these states honestly without becoming an exchange or pretending to settle jurisdiction-specific legal questions.
+
+ECOSYSTEM, ENGAGEMENT AND PROMOTION
+
+All results will be developed in public under AGPL-3.0-or-later. The project will use the GNU Taler mailing list, bug tracker and Integration Community Hub for protocol/interface work. Design proposals and patches will be sent upstream early, with public links recorded in the repository.
+
+For adoption, the project will contact the Formbricks community about the reference adapter and invite other FOSS survey, research, community and bug-bounty projects to test the generic API. Feedback and decisions will be recorded without personal or confidential payment data.
+
+A public status page will be updated at least every two months. Each milestone will publish code, tests, documentation and a short demonstration or report. Releases, SBOMs, audit dispositions and migration notes will remain available without login. Sustainability comes from a small protocol-independent core, a stable OpenAPI contract, copyleft licensing, documented self-hosting and upstreaming changes rather than maintaining a permanent private fork. A future hosted service may support maintenance, but use of the software will never depend on that service.
+
+GENERATIVE AI
+
+Yes. OpenAI Codex (GPT-5) was used on 14 July 2026 to audit the repository against the current NLnet call, draft this proposal package, activate CI and improve documentation. The model, timestamp, exact prompts and unedited proposal output are recorded in docs/nlnet/GENAI_PROPOSAL_LOG.md and docs/nlnet/GENAI_OUTPUT_2026-07-14.txt.
+
+The initial public prototype commit records that Claude Opus 4.8 was used as an AI assistant; Claude is not represented as a human or legal co-author/contributor. That assistance concerns pre-existing project materials rather than grant-funded work and is disclosed in docs/GENAI_USAGE.md. Historical prompt transcripts must be supplied if available. All generated material is subject to human review, testing and license/provenance checks; no purely generated output will be presented as grant-eligible human work.
+
+SUGGESTED ATTACHMENTS
+
+The form provides three general attachment slots. Use:
+
+1. docs/nlnet/BUDGET.md
+2. docs/nlnet/COMPARISON.md
+3. docs/SANDBOX_EVIDENCE_2026-07-12.md
+
+The public repository already links the architecture, threat model, privacy model and current project status, so those do not need scarce attachment slots.
+
+The form separately provides prompt-file slots. Use:
+
+1. docs/nlnet/GENAI_PROPOSAL_LOG.md
+2. docs/nlnet/GENAI_OUTPUT_2026-07-14.txt

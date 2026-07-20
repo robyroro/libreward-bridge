@@ -1,0 +1,19 @@
+name: Security finding (non-sensitive only)
+description: Track a sanitized security review finding; report exploitable secrets privately.
+title: "[security] "
+labels: [security]
+body:
+  - type: markdown
+    attributes: { value: "Do not include live keys, claim/Taler URIs, wallet data, personal data, or exploit details that endanger deployments. Follow SECURITY.md for private reporting." }
+  - type: textarea
+    id: scope
+    attributes: { label: Scope and sanitized impact }
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes: { label: Reproduction or evidence }
+    validations: { required: true }
+  - type: dropdown
+    id: severity
+    attributes: { label: Proposed severity, options: [Critical, High, Medium, Low, Informational] }
+    validations: { required: true }

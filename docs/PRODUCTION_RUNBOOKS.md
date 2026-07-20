@@ -2,6 +2,14 @@
 
 These procedures are mandatory inputs to a real-money pilot. They do not replace jurisdiction-specific legal advice or the exchange/operator's own procedures.
 
+## Direct wallet break-glass access
+
+1. Disable new claim starts and stop all LibreReward workers sharing the wallet.
+2. Verify no worker or second wallet process can reach the wallet RPC/database. PostgreSQL serialization does not cover manual CLI commands.
+3. Prefer read-only transaction inspection. Never initiate a replacement merely because an operation is absent from the Bridge database.
+4. Record public IDs, exact versions, timestamps, and decisions without claim/Taler URIs, wallet content, keys, or personal data.
+5. Restore the single wallet server, run `provider:check` and a fresh liquidity check, reconcile every nonterminal known ID, then re-enable workers and claims deliberately.
+
 ## KYC or exchange-terms interruption
 
 1. Stop new claim starts by removing the affected currency from service or setting a zero operational limit outside the Bridge configuration rollout.

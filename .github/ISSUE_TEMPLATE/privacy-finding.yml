@@ -1,0 +1,13 @@
+name: Privacy finding
+description: Track data minimization, lifecycle, or privacy-control findings.
+title: "[privacy] "
+labels: [privacy]
+body:
+  - type: textarea
+    id: data
+    attributes: { label: Data class and flow, description: "Use synthetic examples only." }
+    validations: { required: true }
+  - type: textarea
+    id: risk
+    attributes: { label: Risk and expected control }
+    validations: { required: true }

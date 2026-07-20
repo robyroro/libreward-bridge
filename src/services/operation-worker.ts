@@ -214,8 +214,14 @@ export class OperationWorker {
     }
     const ambiguous = error.classification === "ambiguous";
     await this.pool.query(
-      "UPDATE provider_operations SET state=$1,last_error_code=$2,updated_at=now() WHERE id=$3",
-      [ambiguous ? "ambiguous" : "failed", error.code, operation.id],
+      `UPDATE provider_operations SET state=$1,last_error_code=$2,
+       external_operation_id=COALESCE($3,external_operation_id),updated_at=now() WHERE id=$4`,
+      [
+        ambiguous ? "ambiguous" : "failed",
+        error.code,
+        error.externalOperationId ?? null,
+        operation.id,
+      ],
     );
     await this.markReward(
       operation.reward_id,

@@ -6,6 +6,7 @@ Method: STRIDE review of integrator API, claim channel, database, worker, wallet
 |---|---|---|
 | Stolen claim link / referrer leakage | 256-bit PRF token, no-store, `Referrer-Policy: no-referrer`, CSP, no cookies/trackers, short expiry, regeneration/revocation | The distribution channel or recipient device can leak a bearer URL. |
 | Brute force / timing | 256-bit space, keyed hash, constant-time comparison API, per-IP claim rate limit, generic 404 | Distributed denial-of-service remains possible. |
+| Forwarded-IP spoofing | Forwarded headers ignored by default; explicit bounded hop or IP/CIDR proxy trust | A wrong topology can let clients evade rate limits or make all users share one limit. |
 | Token/secret logs | structured redaction of URL, authorization, location, secret fields; no provider bodies | Reverse proxies must apply equivalent query/path redaction. |
 | Duplicate/concurrent claim | row locks, consumed timestamp, unique provider operation | Unknown wallet-core initiation outcome cannot be safely replayed. |
 | API replay/idempotency abuse | scoped key, unique per-tenant key, canonical request fingerprint | A stolen API key can create valid rewards until revoked. |
@@ -27,7 +28,7 @@ Method: STRIDE review of integrator API, claim channel, database, worker, wallet
 
 ## Security invariants
 
-No direct reward status update occurs outside domain/worker transition code. No automatic repeat occurs after an ambiguous externally effectful wallet operation. Claim token, API key, webhook secret, decrypted Taler URI, authorization header, and wallet database content never belong in logs or audit events. No recipient PII is required.
+No direct reward status update occurs outside domain/worker transition code. No automatic repeat occurs after an ambiguous externally effectful wallet operation, whether the transaction ID is unknown or known but readiness is uncertain. Claim token, API key, webhook secret, decrypted Taler URI, authorization header, raw provider stderr, connection string, and wallet database content never belong in logs or audit events. No recipient identity is required; tenant metadata and infrastructure IP logs can still be personal data.
 
 ## Residual-risk priorities
 

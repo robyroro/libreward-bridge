@@ -1,0 +1,13 @@
+name: Release blocker
+description: Track a condition that prevents an alpha/beta release.
+title: "[release-blocker] "
+labels: [release-blocker]
+body:
+  - type: textarea
+    id: blocker
+    attributes: { label: Blocking condition and affected release }
+    validations: { required: true }
+  - type: textarea
+    id: closure
+    attributes: { label: Required closure evidence }
+    validations: { required: true }

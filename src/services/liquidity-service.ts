@@ -171,16 +171,18 @@ export class LiquidityService {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
       `libreward:payout:${money.currency}:${new Date().toISOString().slice(0, 10)}`,
     ]);
-    const spent =
+    const spent = BigInt(
       (
-        await client.query<{ atoms: bigint }>(
-          `SELECT COALESCE(sum(po.amount_value*100000000::bigint+po.amount_fraction),0)::bigint AS atoms
+        await client.query<{ atoms: string }>(
+          `SELECT COALESCE(sum(po.amount_value::numeric*100000000+po.amount_fraction),0)::text AS atoms
          FROM provider_operations po
-         WHERE po.currency=$1 AND po.created_at>=date_trunc('day',now())
+         WHERE po.currency=$1
+         AND po.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
          AND po.state NOT IN ('failed','cancelled')`,
           [money.currency],
         )
-      ).rows[0]?.atoms ?? 0n;
+      ).rows[0]?.atoms ?? "0",
+    );
     if (spent + amountAtoms(money) > amountAtoms(limit))
       throw new AppError(429, "daily_payout_limit", "Daily payout limit reached");
   }

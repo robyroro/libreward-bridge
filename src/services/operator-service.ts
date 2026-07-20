@@ -8,39 +8,45 @@ export class OperatorService {
   constructor(private readonly pool: pg.Pool) {}
 
   async reward(reference: string) {
-    const row = (
-      await this.pool.query<{
-        public_id: string;
-        tenant_public_id: string;
-        external_reference: string | null;
-        status: string;
-        currency: string;
-        amount_value: bigint;
-        amount_fraction: number;
-        description: string;
-        expires_at: Date;
-        claimed_at: Date | null;
-        cancelled_at: Date | null;
-        failure_code: string | null;
-        provider: string | null;
-        provider_state: string | null;
-        external_operation_id: string | null;
-        provider_error_code: string | null;
-        created_at: Date;
-        updated_at: Date;
-      }>(
-        `SELECT r.public_id,t.public_id AS tenant_public_id,r.external_reference,r.status,r.currency,
+    const rows = await this.pool.query<{
+      public_id: string;
+      tenant_public_id: string;
+      external_reference: string | null;
+      status: string;
+      currency: string;
+      amount_value: bigint;
+      amount_fraction: number;
+      description: string;
+      expires_at: Date;
+      claimed_at: Date | null;
+      cancelled_at: Date | null;
+      failure_code: string | null;
+      provider: string | null;
+      provider_state: string | null;
+      external_operation_id: string | null;
+      provider_error_code: string | null;
+      created_at: Date;
+      updated_at: Date;
+      exact_public: boolean;
+    }>(
+      `SELECT r.public_id,t.public_id AS tenant_public_id,r.external_reference,r.status,r.currency,
            r.amount_value,r.amount_fraction,r.description,r.expires_at,r.claimed_at,r.cancelled_at,
            r.failure_code,po.provider,po.state AS provider_state,po.external_operation_id,
-           po.last_error_code AS provider_error_code,r.created_at,r.updated_at
+           po.last_error_code AS provider_error_code,r.created_at,r.updated_at,(r.public_id=$1) AS exact_public
          FROM rewards r JOIN tenants t ON t.id=r.tenant_id
          LEFT JOIN provider_operations po ON po.reward_id=r.id
-         WHERE r.public_id=$1 OR r.external_reference=$1 ORDER BY r.created_at DESC LIMIT 1`,
-        [reference],
-      )
-    ).rows[0];
+         WHERE r.public_id=$1 OR r.external_reference=$1 ORDER BY (r.public_id=$1) DESC,r.created_at DESC LIMIT 2`,
+      [reference],
+    );
+    if (rows.rows.length > 1 && !rows.rows[0]?.exact_public)
+      throw new AppError(
+        409,
+        "ambiguous_reference",
+        "External reference matches multiple tenants; use the reward public ID",
+      );
+    const row = rows.rows[0];
     if (!row) throw notFound();
-    const { amount_fraction, amount_value, ...safe } = row;
+    const { amount_fraction, amount_value, exact_public: _exactPublic, ...safe } = row;
     return {
       ...safe,
       amount: serializeAmount({

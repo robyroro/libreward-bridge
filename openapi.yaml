@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: LibreReward Bridge API
-  version: 0.1.0
-  description: Tenant API for privacy-preserving GNU Taler reward claims.
+  version: 0.1.0-alpha.1
+  description: API for a valueless-sandbox research prototype; not approved for real-money use.
 servers:
-  - url: http://localhost:8080
+  - url: https://bridge.example.invalid
+    description: Operator-supplied HTTPS deployment URL
 security:
   - bearerApiKey: []
 paths:
@@ -52,34 +53,49 @@ paths:
       parameters:
         - $ref: '#/components/parameters/RewardId'
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
-        - { name: cursor, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: cursor, in: query, description: Opaque composite cursor returned by the previous page; do not construct it., schema: { type: string, maxLength: 128 } }
       responses:
-        '200': { description: Events, content: { application/json: { schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/Event' } }, next_cursor: { type: [string, 'null'] } } } } } }
+        '200': { description: Events in reverse chronological order, content: { application/json: { schema: { type: object, required: [data, next_cursor], properties: { data: { type: array, items: { $ref: '#/components/schemas/Event' } }, next_cursor: { type: [string, 'null'] } } } } } }
+        '422': { $ref: '#/components/responses/Error' }
   /v1/webhook-endpoints:
     get:
       operationId: listWebhookEndpoints
-      responses: { '200': { description: Endpoints } }
+      responses:
+        '200': { description: Tenant endpoints, content: { application/json: { schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: '#/components/schemas/WebhookEndpoint' } } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
     post:
       operationId: createWebhookEndpoint
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/WebhookInput' } } }
       responses:
-        '201': { description: Created; secret appears only in this response }
+        '201': { description: Created; secret appears only in this response, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookCreated' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
   /v1/webhook-endpoints/{endpointId}:
     parameters: [{ name: endpointId, in: path, required: true, schema: { type: string } }]
     patch:
       operationId: updateWebhookEndpoint
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookInput' } } } }
-      responses: { '200': { description: Updated } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookEndpoint' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
     delete:
       operationId: deleteWebhookEndpoint
-      responses: { '204': { description: Deleted } }
+      responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' } }
   /v1/webhook-endpoints/{endpointId}/test:
     post:
       operationId: testWebhookEndpoint
       parameters: [{ name: endpointId, in: path, required: true, schema: { type: string } }]
-      responses: { '202': { description: Test queued } }
+      responses: { '202': { description: Test queued }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } }
+  /v1/webhook-endpoints/{endpointId}/rotate-secret:
+    post:
+      operationId: rotateWebhookSecret
+      parameters: [{ $ref: '#/components/parameters/EndpointId' }]
+      responses:
+        '200': { description: New secret returned once; the previous secret is immediately invalid, content: { application/json: { schema: { $ref: '#/components/schemas/WebhookSecret' } } } }
+        '404': { $ref: '#/components/responses/Error' }
   /v1/operator/rewards/{reference}:
     get:
       security: [{ operatorApiKey: [] }]
@@ -161,13 +177,15 @@ paths:
       security: []
       operationId: startClaim
       parameters: [{ $ref: '#/components/parameters/ClaimToken' }]
-      responses: { '202': { description: Provider operation queued }, '409': { $ref: '#/components/responses/Error' } }
+      responses: { '202': { description: Provider operation queued }, '303': { description: HTML client redirect to status page }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '410': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/Error' }, '503': { $ref: '#/components/responses/Error' } }
   /claim/{token}/status:
     get:
       security: []
       operationId: claimStatus
       parameters: [{ $ref: '#/components/parameters/ClaimToken' }]
-      responses: { '200': { description: Claim state and Taler URI when ready } }
+      responses:
+        '200': { description: Claim state and bearer Taler URI when ready, content: { application/json: { schema: { $ref: '#/components/schemas/ClaimStatus' } }, text/html: { schema: { type: string } } } }
+        '404': { $ref: '#/components/responses/Error' }
   /healthz:
     get: { security: [], operationId: health, responses: { '200': { description: Process alive } } }
   /readyz:
@@ -191,6 +209,7 @@ components:
     RewardId: { name: rewardId, in: path, required: true, schema: { type: string, pattern: '^rw_[A-Za-z0-9_-]+$' } }
     OperatorReference: { name: reference, in: path, required: true, schema: { type: string, minLength: 4, maxLength: 128 }, description: Reward public ID or opaque external reference. }
     ClaimToken: { name: token, in: path, required: true, schema: { type: string, minLength: 43, maxLength: 43 }, description: Secret bearer token; redact it from logs. }
+    EndpointId: { name: endpointId, in: path, required: true, schema: { type: string, pattern: '^wh_[A-Za-z0-9_-]+$' } }
   responses:
     Error:
       description: Normalized error
@@ -227,7 +246,7 @@ components:
         - $ref: '#/components/schemas/Reward'
         - type: object
           required: [claim_url, idempotent]
-          properties: { claim_url: { type: string, format: uri }, idempotent: { type: boolean } }
+          properties: { claim_url: { type: [string, 'null'], format: uri }, idempotent: { type: boolean } }
     Event:
       type: object
       required: [event_id, event_type, data, created_at]
@@ -236,6 +255,34 @@ components:
       type: object
       additionalProperties: false
       properties: { url: { type: string, format: uri, maxLength: 2048 }, description: { type: string, maxLength: 120 }, enabled: { type: boolean } }
+    WebhookEndpoint:
+      type: object
+      required: [id, url, description, enabled, created_at]
+      properties:
+        id: { type: string, pattern: '^wh_[A-Za-z0-9_-]+$' }
+        url: { type: string, format: uri }
+        description: { type: string }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WebhookCreated:
+      allOf:
+        - $ref: '#/components/schemas/WebhookEndpoint'
+        - type: object
+          required: [secret]
+          properties: { secret: { type: string, description: Returned once; treat as a credential. } }
+    WebhookSecret:
+      type: object
+      required: [secret]
+      properties: { secret: { type: string, description: Returned once; immediately replaces the old secret. } }
+    ClaimStatus:
+      allOf:
+        - $ref: '#/components/schemas/Reward'
+        - type: object
+          required: [operation_state, taler_uri]
+          properties:
+            operation_state: { type: [string, 'null'] }
+            taler_uri: { type: [string, 'null'], pattern: '^taler://pay-push/', description: Secret bearer capability when present. }
     Error:
       type: object
       required: [error]

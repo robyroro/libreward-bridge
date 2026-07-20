@@ -1,0 +1,13 @@
+name: Upstream compatibility question
+description: Prepare a precise question for GNU Taler upstream without implying approval.
+title: "[upstream] "
+labels: [upstream]
+body:
+  - type: textarea
+    id: question
+    attributes: { label: Technical question and primary-source context }
+    validations: { required: true }
+  - type: textarea
+    id: reproducer
+    attributes: { label: Minimal valueless reproducer }
+    validations: { required: true }
