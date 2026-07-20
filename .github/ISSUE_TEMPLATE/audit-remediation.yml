@@ -1,0 +1,13 @@
+name: Audit remediation
+description: Track remediation of a genuine external-review finding.
+title: "[audit] "
+labels: [audit]
+body:
+  - type: input
+    id: evidence
+    attributes: { label: Review evidence reference }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Remediation and acceptance evidence }
+    validations: { required: true }
