@@ -785,6 +785,19 @@ describe.skipIf(!databaseUrl)("PostgreSQL reward flow", () => {
     expect(maximum).toBe(1);
   });
 
+  it("releases the provider lock when the locked work fails", async () => {
+    await expect(
+      serializedProviderCall(pool, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    await expect(serializedProviderCall(pool, async () => "next")).resolves.toBe("next");
+    const held = await pool.query<{ count: bigint }>(
+      "SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND objid=837650022",
+    );
+    expect(held.rows[0]?.count).toBe(0n);
+  });
+
   it("persists the wallet transaction ID before waiting and recovers it after a crash", async () => {
     await drainQueue();
     const created = await app.inject({
