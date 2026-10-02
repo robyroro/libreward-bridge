@@ -15,12 +15,15 @@ export type CreateOperation = Readonly<{
   expiresAt: Date;
 }>;
 
+export type WalletState = Readonly<{ major: string; minor?: string }>;
+
 export type ProviderResult = Readonly<{
   state: ProviderState;
   externalOperationId?: string;
   claimUri?: string;
   errorCode?: string;
   amount?: string;
+  walletState?: WalletState;
 }>;
 
 export type ProviderBalance = Readonly<{
