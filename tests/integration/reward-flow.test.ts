@@ -905,6 +905,36 @@ describe.skipIf(!databaseUrl)("PostgreSQL reward flow", () => {
     expect(await new OperationWorker(pool, config, provider).runOne()).toBe(true);
   });
 
+  it("reconciles a specific wallet transaction by external ID", async () => {
+    await drainQueue();
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/rewards",
+      headers: { authorization: `Bearer ${key}`, "idempotency-key": "reconcile-by-external" },
+      payload: { amount: "KUDOS:1", description: "External reconcile evidence" },
+    });
+    const token = created.json<{ claim_url: string }>().claim_url.split("/").at(-1) as string;
+    await app.inject({ method: "POST", url: `/claim/${token}/start` });
+    const worker = new OperationWorker(pool, config, provider);
+    expect(await worker.runOne()).toBe(true);
+    const externalId = (
+      await pool.query<{ external_operation_id: string }>(
+        "SELECT external_operation_id FROM provider_operations ORDER BY created_at DESC LIMIT 1",
+      )
+    ).rows[0]?.external_operation_id as string;
+    provider.complete(externalId);
+    expect(await worker.reconcileOne(undefined, "mock:does-not-exist")).toBe(false);
+    expect(await worker.reconcileOne(undefined, externalId)).toBe(true);
+    expect(
+      (
+        await pool.query<{ state: string }>(
+          "SELECT state FROM provider_operations WHERE external_operation_id=$1",
+          [externalId],
+        )
+      ).rows[0]?.state,
+    ).toBe("succeeded");
+  });
+
   // Earlier tests may leave started claims queued; the worker always takes the oldest one.
   async function drainQueue(): Promise<void> {
     while (await new OperationWorker(pool, config, provider).runOne()) {}

@@ -5,11 +5,13 @@ import { providerFor } from "./runtime.js";
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
-const app = buildApp(pool, config, providerFor(config));
+const provider = providerFor(config);
+const app = buildApp(pool, config, provider);
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "shutting_down");
   await app.close();
+  provider.close?.();
   await pool.end();
 }
 process.once("SIGTERM", () => void shutdown("SIGTERM"));

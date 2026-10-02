@@ -13,6 +13,11 @@ await provider.verifyConfiguration();
 const operations = new OperationWorker(pool, config, provider);
 const webhooks = new WebhookService(pool, config);
 const liquidity = new LiquidityService(pool, config, provider);
+// Wallet notifications trigger immediate reconciliation; the periodic pass remains the safety net.
+const updatedOperations = new Set<string>();
+const unsubscribe = provider.onOperationUpdate?.((externalOperationId) =>
+  updatedOperations.add(externalOperationId),
+);
 let stopping = false;
 process.once("SIGTERM", () => {
   stopping = true;
@@ -26,6 +31,10 @@ let lastReconcile = 0;
 let lastRetention = 0;
 let lastLiquidity = 0;
 while (!stopping) {
+  for (const externalOperationId of [...updatedOperations]) {
+    updatedOperations.delete(externalOperationId);
+    await operations.reconcileOne(undefined, externalOperationId);
+  }
   const liquidityRequested = await liquidity.runRequestedCheck();
   if (liquidityRequested) lastLiquidity = Date.now();
   const worked = liquidityRequested || (await operations.runOne()) || (await webhooks.deliverOne());
@@ -55,4 +64,6 @@ while (!stopping) {
   }
   if (!worked) await delay(config.WORKER_POLL_MS);
 }
+unsubscribe?.();
+provider.close?.();
 await pool.end();
