@@ -67,6 +67,20 @@ if (operation === "initiatePeerPushDebit" && walletTarget.includes("timeout-wall
         ),
       );
       break;
+    case "checkPeerPushDebit":
+      process.stdout.write(
+        JSON.stringify(
+          response({
+            type: "ok",
+            amountRaw: "KUDOS:1",
+            amountEffective: "KUDOS:1.01",
+            exchangeBaseUrl: "https://exchange.example/",
+            maxExpirationDate: { t_s: 1_956_528_000 },
+            defaultExpiration: { d_us: 604_800_000_000 },
+          }),
+        ),
+      );
+      break;
     case "initiatePeerPushDebit":
       process.stdout.write(
         JSON.stringify(response({ transactionId: "txn:peer-push-debit:fixture" })),

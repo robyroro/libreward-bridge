@@ -9,7 +9,7 @@ import { keyedHash } from "../../src/domain/crypto.js";
 import { publicId, randomSecret, uuid } from "../../src/domain/ids.js";
 import { verifyWebhookSignature } from "../../src/domain/webhook-signing.js";
 import { MockProvider } from "../../src/providers/mock-provider.js";
-import type { RewardPaymentProvider } from "../../src/providers/provider.js";
+import { ProviderError, type RewardPaymentProvider } from "../../src/providers/provider.js";
 import { LiquidityService } from "../../src/services/liquidity-service.js";
 import { OperationWorker } from "../../src/services/operation-worker.js";
 import { serializedProviderCall } from "../../src/services/provider-lock.js";
@@ -308,10 +308,9 @@ describe.skipIf(!databaseUrl)("PostgreSQL reward flow", () => {
       key: "cancelled-fixture",
       verifyConfiguration: async () => undefined,
       getBalances: async () => ({ balances: [], haveProductionBalance: false }),
-      createRewardOperation: async () => ({
-        state: "cancelled",
-        externalOperationId: "txn:peer-push-debit:cancelled",
-      }),
+      preflight: async () => ({ amountEffective: "KUDOS:1" }),
+      initiate: async () => "txn:peer-push-debit:cancelled",
+      waitUntilShareable: async () => ({ state: "cancelled" }),
       getOperationStatus: async () => ({ state: "cancelled" }),
       cancelOperation: async () => ({ state: "cancelled" }),
     };
@@ -785,6 +784,118 @@ describe.skipIf(!databaseUrl)("PostgreSQL reward flow", () => {
     await Promise.all(Array.from({ length: 25 }, call));
     expect(maximum).toBe(1);
   });
+
+  it("persists the wallet transaction ID before waiting and recovers it after a crash", async () => {
+    await drainQueue();
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/rewards",
+      headers: { authorization: `Bearer ${key}`, "idempotency-key": "crash-after-initiate" },
+      payload: { amount: "KUDOS:1", description: "Crash recovery evidence" },
+    });
+    const reward = created.json<{ id: string; claim_url: string }>();
+    const token = reward.claim_url.split("/").at(-1) as string;
+    expect((await app.inject({ method: "POST", url: `/claim/${token}/start` })).statusCode).toBe(
+      202,
+    );
+    const crashing: RewardPaymentProvider = {
+      key: "crash-fixture",
+      verifyConfiguration: async () => undefined,
+      getBalances: () => provider.getBalances(),
+      preflight: (input) => provider.preflight(input),
+      initiate: (input) => provider.initiate(input),
+      waitUntilShareable: async () => {
+        throw new Error("simulated process death");
+      },
+      getOperationStatus: (id) => provider.getOperationStatus(id),
+      cancelOperation: (id) => provider.cancelOperation(id),
+    };
+    expect(await new OperationWorker(pool, config, crashing).runOne()).toBe(true);
+    const row = (
+      await pool.query<{
+        external_operation_id: string;
+        state: string;
+        amount_effective_value: bigint;
+      }>(
+        `SELECT po.external_operation_id,po.state,po.amount_effective_value FROM provider_operations po
+         JOIN rewards r ON r.id=po.reward_id WHERE r.public_id=$1`,
+        [reward.id],
+      )
+    ).rows[0];
+    expect(row?.external_operation_id).toMatch(/^mock:/);
+    expect(row?.state).toBe("ambiguous");
+    expect(row?.amount_effective_value).toBe(1n);
+    expect(await new OperationWorker(pool, config, provider).reconcileOne(reward.id)).toBe(true);
+    const recovered = (
+      await pool.query<{ status: string; state: string }>(
+        `SELECT r.status,po.state FROM rewards r JOIN provider_operations po ON po.reward_id=r.id
+         WHERE r.public_id=$1`,
+        [reward.id],
+      )
+    ).rows[0];
+    expect(recovered).toEqual({ status: "claim_in_progress", state: "ready" });
+  });
+
+  it("retries insufficient balance without creating a wallet operation", async () => {
+    await drainQueue();
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/rewards",
+      headers: { authorization: `Bearer ${key}`, "idempotency-key": "insufficient-balance" },
+      payload: { amount: "KUDOS:1", description: "Insufficient balance evidence" },
+    });
+    const reward = created.json<{ id: string; claim_url: string }>();
+    const token = reward.claim_url.split("/").at(-1) as string;
+    expect((await app.inject({ method: "POST", url: `/claim/${token}/start` })).statusCode).toBe(
+      202,
+    );
+    let initiations = 0;
+    const empty: RewardPaymentProvider = {
+      key: "empty-fixture",
+      verifyConfiguration: async () => undefined,
+      getBalances: async () => ({ balances: [], haveProductionBalance: false }),
+      preflight: async () => {
+        throw new ProviderError("transient", "wallet_insufficient_balance", "insufficient");
+      },
+      initiate: async () => {
+        initiations += 1;
+        return "txn:peer-push-debit:never";
+      },
+      waitUntilShareable: async () => ({ state: "pending" }),
+      getOperationStatus: async () => ({ state: "pending" }),
+      cancelOperation: async () => ({ state: "cancelled" }),
+    };
+    expect(await new OperationWorker(pool, config, empty).runOne()).toBe(true);
+    expect(initiations).toBe(0);
+    const row = (
+      await pool.query<{
+        state: string;
+        external_operation_id: string | null;
+        last_error_code: string;
+      }>(
+        `SELECT po.state,po.external_operation_id,po.last_error_code FROM provider_operations po
+         JOIN rewards r ON r.id=po.reward_id WHERE r.public_id=$1`,
+        [reward.id],
+      )
+    ).rows[0];
+    expect(row).toEqual({
+      state: "retry",
+      external_operation_id: null,
+      last_error_code: "wallet_insufficient_balance",
+    });
+    // Drain so later tests are order-independent.
+    await pool.query(
+      `UPDATE provider_operations po SET next_retry_at=now() FROM rewards r
+       WHERE r.id=po.reward_id AND r.public_id=$1`,
+      [reward.id],
+    );
+    expect(await new OperationWorker(pool, config, provider).runOne()).toBe(true);
+  });
+
+  // Earlier tests may leave started claims queued; the worker always takes the oldest one.
+  async function drainQueue(): Promise<void> {
+    while (await new OperationWorker(pool, config, provider).runOne()) {}
+  }
 
   async function tenant(name: string): Promise<string> {
     const tenantId = uuid();

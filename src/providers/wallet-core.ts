@@ -1,4 +1,11 @@
-import { type ProviderBalances, ProviderError, type ProviderResult } from "./provider.js";
+import { amountAtoms, type Money, parseBalanceAmount, serializeAmount } from "../domain/money.js";
+import {
+  type CreateOperation,
+  type PreflightResult,
+  type ProviderBalances,
+  ProviderError,
+  type ProviderResult,
+} from "./provider.js";
 
 // Exact versions verified against official source and valueless sandbox evidence.
 export const supportedWalletVersions: ReadonlySet<string> = new Set(["1.6.10", "1.6.12"]);
@@ -129,4 +136,95 @@ export function mapPeerPushDebitTransaction(
     default:
       return { ...base, state: "ambiguous", errorCode: "wallet_state_unexpected" };
   }
+}
+
+export function peerPushCheckRequest(
+  input: CreateOperation,
+  exchangeBaseUrl?: string,
+): Record<string, unknown> {
+  return {
+    amount: serializeAmount(input.amount),
+    ...(exchangeBaseUrl ? { exchangeBaseUrl } : {}),
+  };
+}
+
+/** Interprets `checkPeerPushDebit` (wallet API 7:0:0; `peerPushDebitQuote` from 10:0:0). */
+export function parsePeerPushCheck(response: unknown, input: CreateOperation): PreflightResult {
+  if (!isObject(response)) throw malformedResponse("wallet check response is malformed");
+  if (response.type === "insufficient-balance")
+    // Nothing was created, so a later retry is safe.
+    throw new ProviderError(
+      "transient",
+      "wallet_insufficient_balance",
+      "wallet balance is insufficient for the reward",
+    );
+  const { amountRaw, amountEffective, exchangeBaseUrl, maxExpirationDate, peerPushDebitQuote } =
+    response;
+  if (
+    response.type !== "ok" ||
+    typeof amountRaw !== "string" ||
+    typeof amountEffective !== "string" ||
+    typeof exchangeBaseUrl !== "string" ||
+    !isObject(maxExpirationDate)
+  )
+    throw malformedResponse("wallet check response is malformed");
+  const currencies = new Set([input.amount.currency]);
+  let raw: Money;
+  let effective: Money;
+  try {
+    raw = parseBalanceAmount(amountRaw, currencies);
+    effective = parseBalanceAmount(amountEffective, currencies);
+  } catch {
+    throw malformedResponse("wallet check amounts are malformed");
+  }
+  if (amountAtoms(raw) !== amountAtoms(input.amount))
+    throw new ProviderError(
+      "permanent",
+      "provider_amount_mismatch",
+      "wallet check amount did not match reward",
+    );
+  if (amountAtoms(effective) < amountAtoms(raw))
+    throw malformedResponse("wallet effective amount is below the raw amount");
+  const maxSeconds = maxExpirationDate.t_s;
+  if (typeof maxSeconds !== "number" && maxSeconds !== "never")
+    throw malformedResponse("wallet maximum expiration is malformed");
+  if (typeof maxSeconds === "number" && maxSeconds < Math.floor(input.expiresAt.getTime() / 1000))
+    throw new ProviderError(
+      "permanent",
+      "wallet_expiration_too_late",
+      "reward expiry exceeds the wallet's maximum purse expiration",
+    );
+  return {
+    amountEffective: serializeAmount(effective),
+    exchangeBaseUrl,
+    ...(typeof peerPushDebitQuote === "string" ? { quote: peerPushDebitQuote } : {}),
+  };
+}
+
+export function peerPushInitiateRequest(
+  input: CreateOperation,
+  preflight: PreflightResult,
+  exchangeBaseUrl?: string,
+): Record<string, unknown> {
+  // Pin the exchange the check selected; forward the quote so newer wallets reject drift.
+  const exchange = preflight.exchangeBaseUrl ?? exchangeBaseUrl;
+  return {
+    ...(exchange ? { exchangeBaseUrl: exchange } : {}),
+    ...(preflight.quote ? { peerPushDebitQuote: preflight.quote } : {}),
+    partialContractTerms: {
+      amount: serializeAmount(input.amount),
+      summary: input.summary,
+      purse_expiration: { t_s: Math.floor(input.expiresAt.getTime() / 1000) },
+    },
+  };
+}
+
+export function parseInitiation(result: unknown): string {
+  if (
+    !isObject(result) ||
+    typeof result.transactionId !== "string" ||
+    !result.transactionId.startsWith("txn:peer-push-debit:")
+  )
+    throw malformedResponse("wallet initiation response is malformed");
+  return result.transactionId;
 }

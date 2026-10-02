@@ -3,10 +3,14 @@ import type { Config } from "../config.js";
 import { transaction } from "../db.js";
 import { encrypt } from "../domain/crypto.js";
 import { publicId, uuid } from "../domain/ids.js";
-import { serializeAmount } from "../domain/money.js";
+import { type Money, parseBalanceAmount, serializeAmount } from "../domain/money.js";
 import { assertTransition, type RewardStatus } from "../domain/state-machine.js";
 import { claimsCompleted, providerDuration, reconciliationBacklog } from "../metrics.js";
-import type { ProviderResult, RewardPaymentProvider } from "../providers/provider.js";
+import type {
+  CreateOperation,
+  ProviderResult,
+  RewardPaymentProvider,
+} from "../providers/provider.js";
 import { ProviderError } from "../providers/provider.js";
 import { serializedProviderCall } from "./provider-lock.js";
 import { type RetentionResult, RetentionService } from "./retention-service.js";
@@ -24,6 +28,8 @@ type OperationRow = {
   expires_at: Date;
 };
 
+type Initiated = Readonly<{ operation: OperationRow; externalOperationId: string | null }>;
+
 export class OperationWorker {
   constructor(
     private readonly pool: pg.Pool,
@@ -32,55 +38,28 @@ export class OperationWorker {
   ) {}
 
   async runOne(): Promise<boolean> {
-    return serializedProviderCall(this.pool, async () => {
-      const operation = await transaction(this.pool, async (client) => {
-        const result = await client.query<OperationRow>(
-          `SELECT po.*,r.description,r.expires_at FROM provider_operations po JOIN rewards r ON r.id=po.reward_id
-           WHERE po.state IN ('pending','retry') AND po.external_operation_id IS NULL
-           AND (po.next_retry_at IS NULL OR po.next_retry_at<=now())
-           ORDER BY po.created_at FOR UPDATE OF po SKIP LOCKED LIMIT 1`,
-        );
-        const row = result.rows[0];
-        if (!row) return null;
-        await client.query(
-          "UPDATE provider_operations SET state='processing',processing_started_at=now(),updated_at=now() WHERE id=$1",
-          [row.id],
-        );
-        return row;
-      });
-      if (!operation) return false;
-      const end = providerDuration.startTimer({ operation: "create" });
-      try {
-        const result = await this.provider.createRewardOperation({
-          operationId: operation.id,
-          amount: {
-            value: operation.amount_value,
-            fraction: operation.amount_fraction,
-            currency: operation.currency,
-          },
-          summary: operation.description,
-          expiresAt: operation.expires_at,
-        });
-        end({ result: result.state });
-        await this.applyResult(operation, result);
-      } catch (error) {
-        const providerError =
-          error instanceof ProviderError
-            ? error
-            : new ProviderError("ambiguous", "provider_unknown", "unknown provider outcome");
-        end({ result: providerError.classification });
-        await this.applyError(operation, providerError);
-      }
-      return true;
-    });
+    // Only wallet writes run under the provider lock (GNU Taler upstream guidance, 2026-07-14).
+    const initiated = await serializedProviderCall(
+      this.pool,
+      async (): Promise<Initiated | null> => {
+        const operation = await this.claimNext();
+        if (!operation) return null;
+        return { operation, externalOperationId: await this.initiate(operation) };
+      },
+    );
+    if (!initiated) return false;
+    if (initiated.externalOperationId)
+      await this.awaitShareable(initiated.operation, initiated.externalOperationId);
+    return true;
   }
 
-  async reconcileOne(rewardPublicId?: string): Promise<boolean> {
+  async reconcileOne(rewardPublicId?: string, externalOperationId?: string): Promise<boolean> {
     const result = await this.pool.query<OperationRow>(
       `SELECT po.*,r.description,r.expires_at FROM provider_operations po JOIN rewards r ON r.id=po.reward_id
        WHERE po.external_operation_id IS NOT NULL AND po.state IN ('ready','ambiguous','processing','pending')
-       AND ($1::text IS NULL OR r.public_id=$1) ORDER BY po.updated_at LIMIT 1`,
-      [rewardPublicId ?? null],
+       AND ($1::text IS NULL OR r.public_id=$1) AND ($2::text IS NULL OR po.external_operation_id=$2)
+       ORDER BY po.updated_at LIMIT 1`,
+      [rewardPublicId ?? null, externalOperationId ?? null],
     );
     const operation = result.rows[0];
     if (!operation?.external_operation_id) return false;
@@ -140,6 +119,89 @@ export class OperationWorker {
     return new RetentionService(this.pool, this.config).run("worker");
   }
 
+  private async claimNext(): Promise<OperationRow | null> {
+    return transaction(this.pool, async (client) => {
+      const result = await client.query<OperationRow>(
+        `SELECT po.*,r.description,r.expires_at FROM provider_operations po JOIN rewards r ON r.id=po.reward_id
+         WHERE po.state IN ('pending','retry') AND po.external_operation_id IS NULL
+         AND (po.next_retry_at IS NULL OR po.next_retry_at<=now())
+         ORDER BY po.created_at FOR UPDATE OF po SKIP LOCKED LIMIT 1`,
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      await client.query(
+        "UPDATE provider_operations SET state='processing',processing_started_at=now(),updated_at=now() WHERE id=$1",
+        [row.id],
+      );
+      return row;
+    });
+  }
+
+  private input(operation: OperationRow): CreateOperation {
+    return {
+      operationId: operation.id,
+      amount: {
+        value: operation.amount_value,
+        fraction: operation.amount_fraction,
+        currency: operation.currency,
+      },
+      summary: operation.description,
+      expiresAt: operation.expires_at,
+    };
+  }
+
+  /** Preflight and initiate; returns the external ID, or null when the error was recorded. */
+  private async initiate(operation: OperationRow): Promise<string | null> {
+    const input = this.input(operation);
+    const end = providerDuration.startTimer({ operation: "initiate" });
+    let effective: Money;
+    let externalOperationId: string;
+    try {
+      const preflight = await this.provider.preflight(input);
+      effective = effectiveAmount(preflight.amountEffective, operation.currency);
+      externalOperationId = await this.provider.initiate(input, preflight);
+    } catch (error) {
+      const providerError = asProviderError(error);
+      end({ result: providerError.classification });
+      await this.applyError(operation, providerError);
+      return null;
+    }
+    end({ result: "initiated" });
+    // Commit the wallet transaction ID before waiting, so a crash cannot lose it.
+    await this.pool.query(
+      `UPDATE provider_operations SET external_operation_id=$1,initiated_at=now(),
+       amount_effective_value=$2,amount_effective_fraction=$3,updated_at=now() WHERE id=$4`,
+      [externalOperationId, effective.value, effective.fraction, operation.id],
+    );
+    return externalOperationId;
+  }
+
+  private async awaitShareable(
+    operation: OperationRow,
+    externalOperationId: string,
+  ): Promise<void> {
+    const end = providerDuration.startTimer({ operation: "wait" });
+    let result: ProviderResult;
+    try {
+      result = await this.provider.waitUntilShareable(externalOperationId);
+    } catch (error) {
+      const providerError = asProviderError(error);
+      end({ result: providerError.classification });
+      await this.applyError(
+        operation,
+        new ProviderError(
+          "ambiguous",
+          providerError.code,
+          providerError.message,
+          externalOperationId,
+        ),
+      );
+      return;
+    }
+    end({ result: result.state });
+    await this.applyResult(operation, { ...result, externalOperationId });
+  }
+
   private async applyResult(operation: OperationRow, result: ProviderResult): Promise<void> {
     const expectedAmount = serializeAmount({
       value: operation.amount_value,
@@ -157,32 +219,37 @@ export class OperationWorker {
       );
       return;
     }
-    await transaction(this.pool, async (client) => {
-      const state =
-        result.state === "succeeded"
-          ? "succeeded"
-          : result.state === "ready"
-            ? "ready"
-            : result.state;
-      await client.query(
-        `UPDATE provider_operations SET state=$1::varchar,external_operation_id=COALESCE($2,external_operation_id),
-         provider_secret_ciphertext=CASE WHEN $1::varchar='succeeded' THEN NULL ELSE COALESCE($3,provider_secret_ciphertext) END,
-         last_error_code=$4,reconciled_at=now(),updated_at=now()
-         WHERE id=$5`,
-        [
-          state,
-          result.externalOperationId ?? null,
-          result.claimUri ? encrypt(this.config.encryptionKey, result.claimUri) : null,
-          result.errorCode ?? null,
-          operation.id,
-        ],
-      );
-    });
+    await this.pool.query(
+      `UPDATE provider_operations SET state=$1::varchar,external_operation_id=COALESCE($2,external_operation_id),
+       provider_secret_ciphertext=CASE WHEN $1::varchar='succeeded' THEN NULL ELSE COALESCE($3,provider_secret_ciphertext) END,
+       last_error_code=$4,wallet_tx_major=COALESCE($6,wallet_tx_major),
+       wallet_tx_minor=CASE WHEN $6::varchar IS NULL THEN wallet_tx_minor ELSE $7 END,
+       reconciled_at=now(),updated_at=now()
+       WHERE id=$5`,
+      [
+        result.state,
+        result.externalOperationId ?? null,
+        result.claimUri ? encrypt(this.config.encryptionKey, result.claimUri) : null,
+        result.errorCode ?? null,
+        operation.id,
+        result.walletState?.major ?? null,
+        result.walletState?.minor ?? null,
+      ],
+    );
     if (result.state === "succeeded") {
       await this.markReward(operation.reward_id, "claimed", "reward.claimed", {
         provider: this.provider.key,
       });
       claimsCompleted.inc();
+    } else if (result.state === "ready") {
+      // A reconciled operation that is shareable again resumes the claim.
+      await this.markReward(
+        operation.reward_id,
+        "claim_in_progress",
+        "reward.claim_resumed",
+        {},
+        "reconciliation_required",
+      );
     } else if (result.state === "failed") {
       await this.markReward(operation.reward_id, "failed", "reward.failed", {
         code: result.errorCode ?? "provider_failed",
@@ -198,7 +265,7 @@ export class OperationWorker {
         operation.reward_id,
         "reconciliation_required",
         "reward.reconciliation_required",
-        {},
+        result.errorCode ? { code: result.errorCode } : {},
       );
     }
   }
@@ -236,6 +303,7 @@ export class OperationWorker {
     target: RewardStatus,
     eventType: string,
     data: Record<string, unknown>,
+    onlyFrom?: RewardStatus,
   ): Promise<void> {
     await transaction(this.pool, async (client) => {
       const result = await client.query<{
@@ -246,6 +314,7 @@ export class OperationWorker {
       }>("SELECT id,tenant_id,status,version FROM rewards WHERE id=$1 FOR UPDATE", [rewardId]);
       const reward = result.rows[0];
       if (!reward || reward.status === target) return;
+      if (onlyFrom && reward.status !== onlyFrom) return;
       assertTransition(reward.status, target);
       await client.query(
         `UPDATE rewards SET status=$1::varchar,version=version+1,updated_at=now(),
@@ -270,5 +339,23 @@ export class OperationWorker {
         }
       }
     });
+  }
+}
+
+function asProviderError(error: unknown): ProviderError {
+  return error instanceof ProviderError
+    ? error
+    : new ProviderError("ambiguous", "provider_unknown", "unknown provider outcome");
+}
+
+function effectiveAmount(amount: string, currency: string): Money {
+  try {
+    return parseBalanceAmount(amount, new Set([currency]));
+  } catch {
+    throw new ProviderError(
+      "permanent",
+      "provider_effective_amount_invalid",
+      "provider returned an invalid effective amount",
+    );
   }
 }

@@ -4,6 +4,10 @@ import type { ProviderError } from "../../src/providers/provider.js";
 import { TalerWalletCliProvider } from "../../src/providers/taler-wallet-cli-provider.js";
 
 const fixture = fileURLToPath(new URL("../fixtures/fake-taler-wallet-cli.mjs", import.meta.url));
+const preflight = {
+  amountEffective: "KUDOS:1.01",
+  exchangeBaseUrl: "https://exchange.example/",
+};
 
 describe("GNU Taler wallet CLI provider", () => {
   it("uses the documented direct API envelope and maps peer-push state", async () => {
@@ -30,18 +34,15 @@ describe("GNU Taler wallet CLI provider", () => {
       ],
       haveProductionBalance: false,
     });
-    const created = await provider.createRewardOperation({
-      operationId: "operation-1",
-      amount: { currency: "KUDOS", value: 1n, fraction: 0 },
-      summary: "Fixture reward",
-      expiresAt: new Date("2030-01-01T00:00:00Z"),
-    });
-
-    expect(created).toEqual({
+    await expect(provider.preflight(operation())).resolves.toEqual(preflight);
+    const externalId = await provider.initiate(operation(), preflight);
+    expect(externalId).toBe("txn:peer-push-debit:fixture");
+    await expect(provider.waitUntilShareable(externalId)).resolves.toEqual({
       state: "ready",
       externalOperationId: "txn:peer-push-debit:fixture",
       claimUri: "taler://pay-push/exchange.example/fixture",
       amount: "KUDOS:1",
+      walletState: { major: "pending", minor: "ready" },
     });
     await expect(provider.cancelOperation("txn:peer-push-debit:fixture")).resolves.toEqual({
       state: "cancelled",
@@ -51,7 +52,7 @@ describe("GNU Taler wallet CLI provider", () => {
 
   it("does not retry an unknown initiation timeout", async () => {
     await expect(
-      fixtureProvider("timeout-wallet.sqlite3", 100).createRewardOperation(operation()),
+      fixtureProvider("timeout-wallet.sqlite3", 100).initiate(operation(), preflight),
     ).rejects.toMatchObject({
       classification: "ambiguous",
       code: "wallet_cli_timeout",
@@ -60,7 +61,7 @@ describe("GNU Taler wallet CLI provider", () => {
 
   it("maps current wallet errors and expired transactions", async () => {
     await expect(
-      fixtureProvider("error-wallet.sqlite3").createRewardOperation(operation()),
+      fixtureProvider("error-wallet.sqlite3").initiate(operation(), preflight),
     ).rejects.toMatchObject({
       classification: "permanent",
       code: "taler_7012",
@@ -73,6 +74,7 @@ describe("GNU Taler wallet CLI provider", () => {
       externalOperationId: "txn:peer-push-debit:fixture",
       amount: "KUDOS:1",
       errorCode: "wallet_expired",
+      walletState: { major: "expired" },
     });
   });
 
@@ -87,13 +89,15 @@ describe("GNU Taler wallet CLI provider", () => {
       stableFixtureProvider("malformed-wallet.sock").verifyConfiguration(),
     ).rejects.toMatchObject({
       classification: "permanent",
-      code: "wallet_cli_malformed_response",
+      code: "wallet_malformed_response",
     } satisfies Partial<ProviderError>);
   });
 
   it("uses stable polling and retains a known transaction ID after initiation", async () => {
     await expect(
-      stableFixtureProvider("pending-wallet.sock", 600).createRewardOperation(operation()),
+      stableFixtureProvider("pending-wallet.sock", 2_000).waitUntilShareable(
+        "txn:peer-push-debit:fixture",
+      ),
     ).rejects.toMatchObject({
       classification: "ambiguous",
       code: "wallet_readiness_timeout",
@@ -103,7 +107,7 @@ describe("GNU Taler wallet CLI provider", () => {
 
   it("quarantines a malformed initiation response without retrying", async () => {
     await expect(
-      stableFixtureProvider("malformed-init-wallet.sock").createRewardOperation(operation()),
+      stableFixtureProvider("malformed-init-wallet.sock").initiate(operation(), preflight),
     ).rejects.toMatchObject({
       classification: "ambiguous",
       code: "wallet_cli_initiate_unknown",

@@ -1,40 +1,24 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Config } from "../config.js";
-import { serializeAmount } from "../domain/money.js";
 import {
   type CreateOperation,
+  type PreflightResult,
   ProviderError,
   type ProviderResult,
   type RewardPaymentProvider,
 } from "./provider.js";
-
-type Transaction = {
-  transactionId: string;
-  type: string;
-  txState: { major: string; minor?: string };
-  talerUri?: string;
-  amountRaw: string;
-};
-
-type WalletBalances = {
-  balances: Array<{
-    scopeInfo: { currency: string };
-    available: string;
-    pendingIncoming: string;
-    pendingOutgoing: string;
-    disablePeerPayments?: boolean;
-  }>;
-  haveProdBalance: boolean;
-};
-
-type WalletVersion = {
-  implementationSemver: string;
-  version: string;
-};
-
-const supportedWalletVersions = new Set(["1.6.10", "1.6.12"]);
-const supportedWalletApiVersion = "7:0:0";
+import {
+  assertSupportedWalletVersion,
+  isObject,
+  malformedResponse,
+  mapPeerPushDebitTransaction,
+  parseInitiation,
+  parsePeerPushCheck,
+  parseWalletBalances,
+  peerPushCheckRequest,
+  peerPushInitiateRequest,
+} from "./wallet-core.js";
 
 type CliOptions = Pick<
   Config,
@@ -53,27 +37,7 @@ export class TalerWalletCliProvider implements RewardPaymentProvider {
 
   async verifyConfiguration(): Promise<void> {
     await this.run(["--version"], 10_000);
-    const version = await this.api<WalletVersion>("getVersion", {});
-    if (
-      !isObject(version) ||
-      typeof version.implementationSemver !== "string" ||
-      typeof version.version !== "string"
-    )
-      throw malformedResponse("wallet version response is malformed");
-    const semanticVersion = /^(\d+\.\d+\.\d+)(?:[-+].*)?$/.exec(version.implementationSemver)?.[1];
-    if (!semanticVersion || !supportedWalletVersions.has(semanticVersion)) {
-      throw new ProviderError(
-        "permanent",
-        "wallet_version_unsupported",
-        `wallet-core ${version.implementationSemver} is unsupported; supported versions are ${[...supportedWalletVersions].join(", ")}`,
-      );
-    }
-    if (version.version !== supportedWalletApiVersion)
-      throw new ProviderError(
-        "permanent",
-        "wallet_api_version_unsupported",
-        `wallet API ${String(version.version)} is unsupported; expected ${supportedWalletApiVersion}`,
-      );
+    assertSupportedWalletVersion(await this.api("getVersion", {}));
     if (!this.options.TALER_WALLET_CONNECTION && !this.options.TALER_WALLET_ALLOW_TESTING_API)
       throw new ProviderError(
         "permanent",
@@ -83,47 +47,31 @@ export class TalerWalletCliProvider implements RewardPaymentProvider {
   }
 
   async getBalances() {
-    const result = await this.api<WalletBalances>("getBalances", {});
-    if (!isObject(result) || !Array.isArray(result.balances))
-      throw malformedResponse("wallet balances response is malformed");
-    return {
-      balances: result.balances.map((balance) => {
-        if (
-          !isObject(balance) ||
-          !isObject(balance.scopeInfo) ||
-          typeof balance.scopeInfo.currency !== "string" ||
-          typeof balance.available !== "string" ||
-          typeof balance.pendingIncoming !== "string" ||
-          typeof balance.pendingOutgoing !== "string"
-        )
-          throw malformedResponse("wallet balance entry is malformed");
-        return {
-          currency: balance.scopeInfo.currency,
-          available: balance.available,
-          pendingIncoming: balance.pendingIncoming,
-          pendingOutgoing: balance.pendingOutgoing,
-          peerPaymentsAllowed: balance.disablePeerPayments !== true,
-        };
-      }),
-      haveProductionBalance: result.haveProdBalance === true,
-    };
+    return parseWalletBalances(await this.api("getBalances", {}));
   }
 
-  async createRewardOperation(input: CreateOperation): Promise<ProviderResult> {
-    let initiated: { transactionId: string };
+  async preflight(input: CreateOperation): Promise<PreflightResult> {
     try {
-      initiated = await this.api("initiatePeerPushDebit", {
-        ...(this.options.TALER_EXCHANGE_BASE_URL
-          ? { exchangeBaseUrl: this.options.TALER_EXCHANGE_BASE_URL }
-          : {}),
-        partialContractTerms: {
-          amount: serializeAmount(input.amount),
-          summary: input.summary,
-          purse_expiration: { t_s: Math.floor(input.expiresAt.getTime() / 1000) },
-        },
-      });
-      if (!isObject(initiated) || typeof initiated.transactionId !== "string")
-        throw malformedResponse("wallet initiation response is malformed");
+      return parsePeerPushCheck(
+        await this.api("checkPeerPushDebit", peerPushCheckRequest(input, this.exchangeBaseUrl())),
+        input,
+      );
+    } catch (error) {
+      // checkPeerPushDebit is read-only: an unknown CLI outcome cannot have created a payout.
+      if (error instanceof ProviderError && error.classification === "ambiguous")
+        throw new ProviderError("transient", error.code, error.message);
+      throw error;
+    }
+  }
+
+  async initiate(input: CreateOperation, preflight: PreflightResult): Promise<string> {
+    try {
+      return parseInitiation(
+        await this.api(
+          "initiatePeerPushDebit",
+          peerPushInitiateRequest(input, preflight, this.exchangeBaseUrl()),
+        ),
+      );
     } catch (error) {
       if (
         error instanceof ProviderError &&
@@ -136,84 +84,13 @@ export class TalerWalletCliProvider implements RewardPaymentProvider {
         "wallet-core initiation outcome is unknown",
       );
     }
-    try {
-      return await this.waitUntilShareable(initiated.transactionId);
-    } catch (error) {
-      const providerError =
-        error instanceof ProviderError
-          ? error
-          : new ProviderError("ambiguous", "wallet_status_unknown", "wallet status is unknown");
-      throw new ProviderError(
-        "ambiguous",
-        providerError.code,
-        providerError.message,
-        initiated.transactionId,
-      );
-    }
   }
 
-  async getOperationStatus(externalOperationId: string): Promise<ProviderResult> {
-    const tx = await this.api<Transaction>("getTransactionById", {
-      transactionId: externalOperationId,
-    });
-    if (
-      !isObject(tx) ||
-      typeof tx.transactionId !== "string" ||
-      typeof tx.type !== "string" ||
-      !isObject(tx.txState) ||
-      typeof tx.txState.major !== "string" ||
-      typeof tx.amountRaw !== "string"
-    )
-      throw malformedResponse("wallet transaction response is malformed");
-    if (tx.type !== "peer-push-debit")
-      throw new ProviderError(
-        "permanent",
-        "wallet_tx_type",
-        "wallet transaction is not peer-push-debit",
-      );
-    if (tx.transactionId !== externalOperationId)
-      throw new ProviderError(
-        "permanent",
-        "wallet_tx_id_mismatch",
-        "wallet returned a different transaction ID",
-      );
-    if (
-      tx.talerUri &&
-      (tx.talerUri.length > 4096 || !/^taler:\/\/pay-push\/\S+$/.test(tx.talerUri))
-    )
-      throw new ProviderError(
-        "permanent",
-        "wallet_uri_scheme",
-        "wallet returned a non peer-push URI",
-      );
-    const base = { externalOperationId, amount: tx.amountRaw };
-    switch (tx.txState.major) {
-      case "done":
-        return { ...base, state: "succeeded" };
-      case "failed":
-      case "expired":
-      case "deleted":
-        return { ...base, state: "failed", errorCode: `wallet_${tx.txState.major}` };
-      case "aborted":
-        return { ...base, state: "cancelled" };
-      default:
-        return tx.talerUri
-          ? { ...base, state: "ready", claimUri: tx.talerUri }
-          : { ...base, state: "pending" };
-    }
-  }
-
-  async cancelOperation(externalOperationId: string): Promise<ProviderResult> {
-    await this.api("abortTransaction", { transactionId: externalOperationId });
-    return { state: "cancelled", externalOperationId };
-  }
-
-  private async waitUntilShareable(externalOperationId: string): Promise<ProviderResult> {
+  async waitUntilShareable(externalOperationId: string): Promise<ProviderResult> {
     if (!this.options.TALER_WALLET_CONNECTION) {
       // Compatibility path for the verified 1.6.10 sandbox evidence only. The operation name is
       // deliberately isolated here: it is a GNU Taler testing API and is never allowed by the
-      // production configuration. A timeout occurs after initiation, so the known transaction ID
-      // must be retained for reconciliation and initiation must never be repeated automatically.
+      // production configuration. Upstream confirmed on 2026-07-14 that it is not deprecated.
       await this.api("testingWaitTransactionState", {
         transactionId: externalOperationId,
         txState: [
@@ -239,6 +116,22 @@ export class TalerWalletCliProvider implements RewardPaymentProvider {
         );
       await delay(100);
     }
+  }
+
+  async getOperationStatus(externalOperationId: string): Promise<ProviderResult> {
+    return mapPeerPushDebitTransaction(
+      await this.api("getTransactionById", { transactionId: externalOperationId }),
+      externalOperationId,
+    );
+  }
+
+  async cancelOperation(externalOperationId: string): Promise<ProviderResult> {
+    await this.api("abortTransaction", { transactionId: externalOperationId });
+    return { state: "cancelled", externalOperationId };
+  }
+
+  private exchangeBaseUrl(): string | undefined {
+    return this.options.TALER_EXCHANGE_BASE_URL || undefined;
   }
 
   private async api<T>(operation: string, request: Record<string, unknown>): Promise<T> {
@@ -354,12 +247,4 @@ export class TalerWalletCliProvider implements RewardPaymentProvider {
       });
     });
   }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function malformedResponse(message: string): ProviderError {
-  return new ProviderError("permanent", "wallet_cli_malformed_response", message);
 }

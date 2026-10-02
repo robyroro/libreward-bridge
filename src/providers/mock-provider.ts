@@ -1,4 +1,10 @@
-import type { CreateOperation, ProviderResult, RewardPaymentProvider } from "./provider.js";
+import { serializeAmount } from "../domain/money.js";
+import type {
+  CreateOperation,
+  PreflightResult,
+  ProviderResult,
+  RewardPaymentProvider,
+} from "./provider.js";
 
 export class MockProvider implements RewardPaymentProvider {
   readonly key = "mock";
@@ -21,16 +27,24 @@ export class MockProvider implements RewardPaymentProvider {
     };
   }
 
-  async createRewardOperation(input: CreateOperation): Promise<ProviderResult> {
-    const existing = this.effects.get(input.operationId);
+  async preflight(input: CreateOperation): Promise<PreflightResult> {
+    return { amountEffective: serializeAmount(input.amount) };
+  }
+
+  async initiate(input: CreateOperation): Promise<string> {
+    const existing = this.effects.get(input.operationId)?.externalOperationId;
     if (existing) return existing;
-    const result: ProviderResult = {
+    const externalOperationId = `mock:${input.operationId}`;
+    this.effects.set(input.operationId, {
       state: "ready",
-      externalOperationId: `mock:${input.operationId}`,
+      externalOperationId,
       claimUri: `taler://pay-push/mock/${input.operationId}`,
-    };
-    this.effects.set(input.operationId, result);
-    return result;
+    });
+    return externalOperationId;
+  }
+
+  async waitUntilShareable(externalOperationId: string): Promise<ProviderResult> {
+    return this.getOperationStatus(externalOperationId);
   }
 
   async getOperationStatus(externalOperationId: string): Promise<ProviderResult> {

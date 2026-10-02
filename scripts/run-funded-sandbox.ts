@@ -258,15 +258,20 @@ try {
 
   let insufficientBalanceCode = "";
   try {
-    await providerFor(config).createRewardOperation({
+    await providerFor(config).preflight({
       operationId: uuid(),
       amount: { currency, value: 999_999n, fraction: 0 },
       summary: "LibreReward insufficient balance evidence",
       expiresAt: new Date(Date.now() + 30 * 60 * 1000),
     });
-    throw new Error("insufficient operator balance unexpectedly returned a claim URI");
+    throw new Error("insufficient operator balance unexpectedly passed the wallet preflight");
   } catch (error) {
-    if (!(error instanceof ProviderError) || error.classification !== "permanent") throw error;
+    if (
+      !(error instanceof ProviderError) ||
+      error.classification !== "transient" ||
+      error.code !== "wallet_insufficient_balance"
+    )
+      throw error;
     insufficientBalanceCode = error.code;
   }
 
