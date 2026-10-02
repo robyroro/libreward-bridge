@@ -67,3 +67,8 @@ export const retentionDeleted = new Counter({
   labelNames: ["class"] as const,
   registers: [registry],
 });
+export const walletRpcMalformedMessages = new Counter({
+  name: "libreward_wallet_rpc_malformed_messages_total",
+  help: "Wallet RPC messages dropped because they were not understood",
+  registers: [registry],
+});
