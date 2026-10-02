@@ -2705,7 +2705,7 @@ Add `PROVIDER=taler-wallet-rpc`, a client for the `advanced serve` Unix socket (
 - The CLI provider remains for compatibility and valueless sandbox evidence.
 ```
 
-- [ ] **Step 5: `docs/ARCHITECTURE.md`** — add a reference: under the provider section (search for "provider") append the sentence `The wallet transport and readiness model are described in [ADR-003](adr/ADR-003-wallet-rpc-transport.md).`
+- [ ] **Step 5: `docs/ARCHITECTURE.md`** — add a reference: under the provider section (search for "provider") append a sentence linking to ADR-003 (relative link `adr/ADR-003-wallet-rpc-transport.md`).
 
 - [ ] **Step 6: `docs/API.md`** — where reward event types are listed (search for `reward.reconciliation_required`), add `reward.claim_resumed` with the description "A reconciled wallet operation became shareable again; the claim continues."
 

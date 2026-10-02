@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `PROVIDER=taler-wallet-rpc`: persistent wallet-core RPC connection with notification-driven readiness ([ADR-003](docs/adr/ADR-003-wallet-rpc-transport.md)).
+- `checkPeerPushDebit` preflight before every initiation; `peerPushDebitQuote` forwarded when present.
+- Migration `003_wallet_rpc`: effective amount, wallet state and initiation time on provider operations.
+- `reward.claim_resumed` event; metric `libreward_wallet_rpc_malformed_messages_total`.
+
+### Changed
+
+- The wallet transaction ID is committed immediately after initiation; readiness waits run outside the provider lock.
+- Explicit DD037 state mapping: `suspended`, `dialog` and unknown states are ambiguous.
+- Insufficient balance at preflight is retried as transient instead of failing.
+- Error code `wallet_cli_malformed_response` is now `wallet_malformed_response`.
+- Provider duration metric label `operation="create"` is split into `initiate` and `wait`.
+- Upstream answers from the GNU Taler mailing list are recorded in [Upstream questions](docs/UPSTREAM_QUESTIONS.md).
+
+### Upgrade notes
+
+- Run migrations before deploying. Switch `PROVIDER` from `taler-wallet-cli` to `taler-wallet-rpc` when `TALER_WALLET_CONNECTION` is configured.
+
 ## 0.1.0-alpha.1 - Unreleased
 
 - Standardized LibreReward Bridge positioning and research-prototype warnings.
