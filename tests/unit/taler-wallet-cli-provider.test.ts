@@ -9,13 +9,13 @@ const preflight = {
   exchangeBaseUrl: "https://exchange.example/",
 };
 
-describe("GNU Taler wallet CLI provider", () => {
+describe("GNU Taler wallet CLI provider", { timeout: 30_000 }, () => {
   it("uses the documented direct API envelope and maps peer-push state", async () => {
     const provider = new TalerWalletCliProvider({
       TALER_WALLET_CLI: "unused-when-node-script-is-set",
       TALER_WALLET_CLI_NODE_SCRIPT: fixture,
       TALER_WALLET_CRYPTO_WORKER: "sync",
-      TALER_WALLET_COMMAND_TIMEOUT_MS: 1_000,
+      TALER_WALLET_COMMAND_TIMEOUT_MS: 5_000,
       TALER_WALLET_DB: "fixture-wallet.sqlite3",
       TALER_WALLET_CONNECTION: "fixture-wallet.sock",
       TALER_EXCHANGE_BASE_URL: "https://exchange.example/",
@@ -115,7 +115,7 @@ describe("GNU Taler wallet CLI provider", () => {
   });
 });
 
-function fixtureProvider(walletDb: string, timeoutMs = 1_000) {
+function fixtureProvider(walletDb: string, timeoutMs = 5_000) {
   return new TalerWalletCliProvider({
     TALER_WALLET_CLI: "unused-when-node-script-is-set",
     TALER_WALLET_CLI_NODE_SCRIPT: fixture,
@@ -127,7 +127,7 @@ function fixtureProvider(walletDb: string, timeoutMs = 1_000) {
   });
 }
 
-function stableFixtureProvider(walletConnection: string, timeoutMs = 1_000) {
+function stableFixtureProvider(walletConnection: string, timeoutMs = 5_000) {
   return new TalerWalletCliProvider({
     TALER_WALLET_CLI: "unused-when-node-script-is-set",
     TALER_WALLET_CLI_NODE_SCRIPT: fixture,

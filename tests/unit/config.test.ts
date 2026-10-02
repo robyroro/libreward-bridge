@@ -60,10 +60,11 @@ describe("configuration", () => {
 
   it("requires an explicit, bounded proxy trust policy", () => {
     expect(parseTrustProxy("false")).toBe(false);
-    expect(parseTrustProxy("2")).toBe(2);
+    // Hop-count-only trust lets direct clients spoof X-Forwarded-* (GHSA-3m5p-2c4r-xxw2).
+    expect(() => parseTrustProxy("2")).toThrow(/IP\/CIDR/);
     expect(parseTrustProxy("127.0.0.1, 10.0.0.0/8")).toEqual(["127.0.0.1", "10.0.0.0/8"]);
     expect(() => parseTrustProxy("true")).toThrow(/unsafe/);
-    expect(() => parseTrustProxy("11")).toThrow();
+    expect(() => parseTrustProxy("11")).toThrow(/IP\/CIDR/);
     expect(() => parseTrustProxy("not-an-address")).toThrow();
   });
 

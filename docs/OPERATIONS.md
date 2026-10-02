@@ -4,7 +4,7 @@
 
 Run one or more API processes and workers against PostgreSQL. Apply `node dist/src/cli.js migrate` before either starts. Migrations are ordered SQL files guarded by a PostgreSQL advisory lock. Back up PostgreSQL before upgrade and test restoration; do not silently skip a failed migration.
 
-Forwarded client IPs are ignored unless `LIBREREWARD_TRUST_PROXY` explicitly names a bounded hop count or trusted IP/CIDR list. Match this to the only reachable reverse-proxy path and test spoofed `X-Forwarded-For`; a wrong value weakens claim/API rate limits and audit context. Apply equivalent bearer-path redaction at the proxy.
+Forwarded client IPs are ignored unless `LIBREREWARD_TRUST_PROXY` explicitly names a trusted IP/CIDR list (hop counts are rejected). Match this to the only reachable reverse-proxy path and test spoofed `X-Forwarded-For`; a wrong value weakens claim/API rate limits and audit context. Apply equivalent bearer-path redaction at the proxy.
 
 The worker recovers provider and webhook rows left `processing` for more than two minutes. It does not retry an ambiguous wallet initiation without an external transaction ID. API readiness checks database connectivity and, when fail-closed controls are enabled, current healthy liquidity; liveness checks only the process.
 

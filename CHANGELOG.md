@@ -18,9 +18,15 @@
 - Provider duration metric label `operation="create"` is split into `initiate` and `wait`.
 - Upstream answers from the GNU Taler mailing list are recorded in [Upstream questions](docs/UPSTREAM_QUESTIONS.md).
 
+### Security
+
+- Fastify 5.12.5 fixes GHSA-w2qp-rph6-63g4, GHSA-3m5p-2c4r-xxw2, GHSA-4mh8-r7rc-xpvc, GHSA-667r-xxjv-c9mm, GHSA-p68q-wchp-6fh7, GHSA-hwr6-493r-vm6h and GHSA-9q9j-q6p8-xq58.
+- `LIBREREWARD_TRUST_PROXY` no longer accepts hop counts; list the reverse proxy IP/CIDR addresses instead.
+
 ### Upgrade notes
 
 - Run migrations before deploying. Switch `PROVIDER` from `taler-wallet-cli` to `taler-wallet-rpc` when `TALER_WALLET_CONNECTION` is configured.
+- Deployments using `LIBREREWARD_TRUST_PROXY=<number>` fail at startup; replace the value with the proxy's IP/CIDR addresses.
 
 ## 0.1.0-alpha.1 - Unreleased
 

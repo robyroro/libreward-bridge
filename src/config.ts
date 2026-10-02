@@ -180,25 +180,24 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export type TrustProxyConfig = false | number | string[];
+export type TrustProxyConfig = false | string[];
 
 export function parseTrustProxy(input: string): TrustProxyConfig {
   const value = input.trim();
   if (value === "false") return false;
-  if (/^[1-9][0-9]?$/.test(value)) {
-    const hops = Number(value);
-    if (hops <= 10) return hops;
-  }
+  // Hop-count-only trust cannot validate the immediate peer, so direct clients could spoof
+  // X-Forwarded-* (GHSA-3m5p-2c4r-xxw2); Fastify 5.12.5 no longer accepts it.
   if (/^[0-9]+$/.test(value))
-    throw new Error("LIBREREWARD_TRUST_PROXY hop count must be between 1 and 10");
+    throw new Error(
+      "LIBREREWARD_TRUST_PROXY hop counts are unsafe; list the trusted proxy IP/CIDR addresses",
+    );
   if (value === "true")
-    throw new Error("LIBREREWARD_TRUST_PROXY=true is unsafe; use a hop count or explicit IP/CIDR");
+    throw new Error("LIBREREWARD_TRUST_PROXY=true is unsafe; use explicit IP/CIDR entries");
   const entries = value
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
-  if (!entries.length)
-    throw new Error("LIBREREWARD_TRUST_PROXY must be false, 1-10, or IP/CIDR entries");
+  if (!entries.length) throw new Error("LIBREREWARD_TRUST_PROXY must be false or IP/CIDR entries");
   for (const entry of entries) {
     try {
       if (entry.includes("/")) ipaddr.parseCIDR(entry);

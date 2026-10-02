@@ -67,7 +67,7 @@ Open the returned `claim_url`, start preparation, and poll its status. The norma
 - An ambiguous wallet initiation is never automatically repeated. Known transaction IDs are retained for reconciliation.
 - Webhooks use HTTPS in production, pinned validated DNS addresses, no redirects, bounded responses, HMAC signatures, event IDs, and bounded retry.
 - Claim pages set no-store/no-referrer policies, use a restrictive CSP, and contain no remote assets, cookies, analytics, or identity inputs.
-- Deployment defaults do not trust forwarded IP headers. A proxy hop count or IP/CIDR allowlist must be explicit.
+- Deployment defaults do not trust forwarded IP headers. An explicit IP/CIDR allowlist of the reverse proxy is required; hop counts are rejected.
 
 This is not a formal security certification. Current blockers include upstream confirmation of the long-running wallet RPC boundary, independent review, key-ring support for online encryption-key rotation, and legal/treasury decisions. See [Known limitations](docs/KNOWN_LIMITATIONS.md) and [external review status](docs/SECURITY_PRIVACY_LEGAL_REVIEW.md).
 
