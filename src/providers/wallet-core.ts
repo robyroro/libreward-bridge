@@ -228,3 +228,12 @@ export function parseInitiation(result: unknown): string {
     throw malformedResponse("wallet initiation response is malformed");
   return result.transactionId;
 }
+
+/** Returns the transaction ID of a `transaction-state-transition` notification, if any. */
+export function transitionTransactionId(notification: unknown): string | undefined {
+  return isObject(notification) &&
+    notification.type === "transaction-state-transition" &&
+    typeof notification.transactionId === "string"
+    ? notification.transactionId
+    : undefined;
+}

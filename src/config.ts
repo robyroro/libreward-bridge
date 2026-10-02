@@ -22,7 +22,7 @@ const schema = z
     OPERATOR_API_KEY_HASH_SECRET: z.string().min(32),
     CLAIM_TOKEN_HASH_SECRET: z.string().min(32),
     DATA_ENCRYPTION_KEY: z.string().min(43).max(44),
-    PROVIDER: z.enum(["mock", "taler-wallet-cli"]).default("mock"),
+    PROVIDER: z.enum(["mock", "taler-wallet-cli", "taler-wallet-rpc"]).default("mock"),
     TALER_WALLET_CLI: z.string().default("taler-wallet-cli"),
     TALER_WALLET_CLI_NODE_SCRIPT: z.string().optional().or(z.literal("")),
     TALER_WALLET_CRYPTO_WORKER: z.enum(["sync", "node-worker-thread"]).optional().or(z.literal("")),
@@ -160,6 +160,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env) {
       "taler-wallet-cli requires TALER_WALLET_CONNECTION or the explicit valueless-sandbox TALER_WALLET_ALLOW_TESTING_API=true compatibility flag",
     );
   }
+  if (env.PROVIDER === "taler-wallet-rpc" && !env.TALER_WALLET_CONNECTION)
+    throw new Error(
+      "taler-wallet-rpc requires TALER_WALLET_CONNECTION (the advanced serve socket)",
+    );
   if (env.LIBREREWARD_ENV === "production") {
     for (const currency of supportedCurrencies) {
       if (!dailyPayoutLimits.has(currency) || !liquidityMinimums.has(currency))

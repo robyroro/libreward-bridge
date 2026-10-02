@@ -10,6 +10,19 @@ const base = {
 };
 
 describe("configuration", () => {
+  it("requires the wallet socket for the RPC provider", () => {
+    expect(() => loadConfig({ ...base, PROVIDER: "taler-wallet-rpc" })).toThrow(
+      /TALER_WALLET_CONNECTION/,
+    );
+    expect(
+      loadConfig({
+        ...base,
+        PROVIDER: "taler-wallet-rpc",
+        TALER_WALLET_CONNECTION: "/run/taler/wallet.sock",
+      }).PROVIDER,
+    ).toBe("taler-wallet-rpc");
+  });
+
   it("rejects insecure exchange HTTP without an explicit development override", () => {
     expect(() =>
       loadConfig({ ...base, TALER_EXCHANGE_BASE_URL: "http://exchange.test/" }),
